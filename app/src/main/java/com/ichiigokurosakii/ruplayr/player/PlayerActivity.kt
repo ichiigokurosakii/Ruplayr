@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -78,7 +80,10 @@ class PlayerActivity : ComponentActivity() {
         applyQuality(initialQuality, selector)
 
         val httpFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/134.0.0.0 Safari/537.36")
+            .setUserAgent("Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Mobile Safari/537.36")
+            .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(15_000)
+            .setReadTimeoutMs(30_000)
             .setDefaultRequestProperties(mapOf(
                 "Referer" to "https://www.movy.sx/",
                 "Origin" to "https://www.movy.sx",
@@ -92,7 +97,12 @@ class PlayerActivity : ComponentActivity() {
             .apply {
                 addListener(object : androidx.media3.common.Player.Listener {
                     override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                        playbackError = "Playback failed: ${error.errorCodeName}\n${error.message.orEmpty()}"
+                        val cause = generateSequence<Throwable>(error) { it.cause }
+                            .take(5)
+                            .mapNotNull { it.message?.takeIf(String::isNotBlank) }
+                            .distinct()
+                            .joinToString("\n")
+                        playbackError = "Playback failed: ${error.errorCodeName}\n${cause.ifBlank { error.message.orEmpty() }}"
                     }
                     override fun onIsPlayingChanged(isPlaying: Boolean) { if (isPlaying) playbackError = null }
                 })
@@ -113,58 +123,79 @@ class PlayerActivity : ComponentActivity() {
                 var speedDialog by remember { mutableStateOf(false) }
                 var selectedQuality by remember { mutableStateOf(initialQuality) }
                 var controllerVisible by remember { mutableStateOf(true) }
-                Box(Modifier.fillMaxSize().background(Color.Black)) {
-                    AndroidView(
-                        modifier = Modifier.fillMaxSize(),
-                        factory = { context ->
-                            PlayerView(context).apply {
-                                useController = true
-                                player = this@PlayerActivity.player
-                                keepScreenOn = true
-                                setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility: Int ->
-                                    controllerVisible = visibility == View.VISIBLE
-                                })
-                                // The custom settings control below replaces the stock button,
-                                // but follows the controller's visibility instead of staying on-screen.
-                                findViewById<View>(androidx.media3.ui.R.id.exo_settings)?.visibility = View.GONE
+                Column(Modifier.fillMaxSize().background(Color.Black)) {
+                    Box(Modifier.weight(1f).fillMaxWidth().background(Color.Black)) {
+                        AndroidView(
+                            modifier = Modifier.fillMaxSize(),
+                            factory = { context ->
+                                PlayerView(context).apply {
+                                    useController = true
+                                    player = this@PlayerActivity.player
+                                    keepScreenOn = true
+                                    setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility: Int ->
+                                        controllerVisible = visibility == View.VISIBLE
+                                    })
+                                    // Settings live in the dedicated strip below the timeline.
+                                    findViewById<View>(androidx.media3.ui.R.id.exo_settings)?.visibility = View.GONE
+                                }
+                            }
+                        )
+                        if (playbackError != null) {
+                            Column(
+                                Modifier.align(Alignment.Center).padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Text(playbackError.orEmpty(), color = Color.White)
+                                Button(onClick = {
+                                    playbackError = null
+                                    player?.apply {
+                                        seekToDefaultPosition()
+                                        prepare()
+                                        playWhenReady = true
+                                    }
+                                }) { Text("Retry playback") }
                             }
                         }
-                    )
-                    if (playbackError != null) {
-                        Box(Modifier.align(Alignment.Center).padding(24.dp)) {
-                            Text(playbackError.orEmpty(), color = Color.White)
-                        }
                     }
-                    if (controllerVisible) Box(Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 6.dp)) {
-                        IconButton(
-                            onClick = { settingsExpanded = true },
-                            modifier = Modifier.background(Color(0xAA151923), RoundedCornerShape(28.dp))
+                    if (controllerVisible) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().height(52.dp).background(Color(0xFF101319)).padding(horizontal = 8.dp),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.Settings, contentDescription = "Player settings", tint = Color.White)
-                        }
-                        DropdownMenu(
-                            expanded = settingsExpanded,
-                            onDismissRequest = { settingsExpanded = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Playback speed") },
-                                onClick = { settingsExpanded = false; speedDialog = true }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Audio tracks") },
-                                onClick = {
-                                    settingsExpanded = false
-                                    player?.let { active ->
-                                        TrackSelectionDialogBuilder(
-                                            this@PlayerActivity, "Audio tracks", active, C.TRACK_TYPE_AUDIO
-                                        ).build().show()
-                                    }
+                            Box {
+                                IconButton(
+                                    onClick = { settingsExpanded = true },
+                                    modifier = Modifier.background(Color(0xAA252B36), RoundedCornerShape(28.dp))
+                                ) {
+                                    Icon(Icons.Default.Settings, contentDescription = "Player settings", tint = Color.White)
                                 }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Video quality · $selectedQuality") },
-                                onClick = { settingsExpanded = false; qualityDialog = true }
-                            )
+                                DropdownMenu(
+                                    expanded = settingsExpanded,
+                                    onDismissRequest = { settingsExpanded = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Playback speed") },
+                                        onClick = { settingsExpanded = false; speedDialog = true }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Audio tracks") },
+                                        onClick = {
+                                            settingsExpanded = false
+                                            player?.let { active ->
+                                                TrackSelectionDialogBuilder(
+                                                    this@PlayerActivity, "Audio tracks", active, C.TRACK_TYPE_AUDIO
+                                                ).build().show()
+                                            }
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Video quality · $selectedQuality") },
+                                        onClick = { settingsExpanded = false; qualityDialog = true }
+                                    )
+                                }
+                            }
                         }
                     }
                     if (qualityDialog) {
