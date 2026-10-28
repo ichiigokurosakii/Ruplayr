@@ -48,6 +48,8 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-dash:1.6.1")
     implementation("androidx.media3:media3-ui:1.6.1")
     implementation("androidx.media3:media3-common:1.6.1")
+    // Software decoding fallback for streams beyond the device codec limits.
+    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.6.1+2")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
