@@ -179,6 +179,7 @@ class PlayerActivity : ComponentActivity() {
                                 }) { Text("Retry playback") }
                             }
                         }
+                    }
                     if (speedDialog) {
                         AlertDialog(
                             onDismissRequest = { speedDialog = false },
