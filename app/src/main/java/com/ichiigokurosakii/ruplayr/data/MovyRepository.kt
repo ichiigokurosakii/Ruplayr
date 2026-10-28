@@ -8,14 +8,26 @@ import java.net.URLEncoder
 import java.net.URL
 
 /**
- * Initial standalone catalogue adapter.
- *
- * Movy's metadata API is used for search and artwork, so the app can render native
- * screens instead of embedding the Movy website. Provider/source extraction will
- * be adapted into this app as a separate layer.
+ * Metadata-backed catalogue adapter for the standalone app.
+ * Artwork and descriptions come from the TMDB-compatible API used by Movy's extension.
  */
 class MovyRepository {
     private val metadataBase = "https://db.wecollege.net/3"
+
+    suspend fun homeRows(): List<MediaRow> = withContext(Dispatchers.IO) {
+        val specs = listOf(
+            Triple("Trending this week", "trending/movie/week?language=en-US", MediaType.MOVIE),
+            Triple("Popular movies", "movie/popular?language=en-US", MediaType.MOVIE),
+            Triple("Popular TV shows", "tv/popular?language=en-US", MediaType.TV),
+            Triple("Action movies", "discover/movie?with_genres=28&sort_by=popularity.desc&language=en-US", MediaType.MOVIE)
+        )
+        specs.mapNotNull { (title, endpoint, type) ->
+            runCatching {
+                val items = parseResults(URL("$metadataBase/$endpoint").readText(), type).take(20)
+                MediaRow(title, items).takeIf { items.isNotEmpty() }
+            }.getOrNull()
+        }
+    }
 
     suspend fun search(query: String): List<MediaItem> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext emptyList()
@@ -27,6 +39,26 @@ class MovyRepository {
             parseResults(URL("$metadataBase/search/tv?query=$encoded&language=en-US").readText(), MediaType.TV)
         }.getOrDefault(emptyList())
         (movies + shows).distinctBy { "${it.mediaType}:${it.id}" }.take(40)
+    }
+
+    suspend fun details(item: MediaItem): MediaItem = withContext(Dispatchers.IO) {
+        val kind = if (item.mediaType == MediaType.MOVIE) "movie" else "tv"
+        runCatching {
+            val obj = JSONObject(URL("$metadataBase/$kind/${item.id}?language=en-US").readText())
+            val title = (if (kind == "movie") obj.optString("title") else obj.optString("name"))
+                .takeIf { it.isNotBlank() && it != "null" } ?: item.title
+            val posterPath = obj.optString("poster_path").takeIf { it.isNotBlank() && it != "null" }
+            val backdropPath = obj.optString("backdrop_path").takeIf { it.isNotBlank() && it != "null" }
+            val date = (if (kind == "movie") obj.optString("release_date") else obj.optString("first_air_date"))
+            item.copy(
+                title = title,
+                posterUrl = posterPath?.let { if (it.startsWith("http")) it else "https://image.tmdb.org/t/p/w500$it" } ?: item.posterUrl,
+                backdropUrl = backdropPath?.let { if (it.startsWith("http")) it else "https://image.tmdb.org/t/p/w1280$it" } ?: item.backdropUrl,
+                overview = obj.optString("overview").takeIf { it.isNotBlank() && it != "null" } ?: item.overview,
+                year = date.take(4).takeIf { it.length == 4 } ?: item.year,
+                detailUrl = "https://www.movy.sx/$kind/${item.id}"
+            )
+        }.getOrDefault(item.copy(detailUrl = "https://www.movy.sx/$kind/${item.id}"))
     }
 
     private fun parseResults(raw: String, type: MediaType): List<MediaItem> {
@@ -51,7 +83,8 @@ class MovyRepository {
                     backdropUrl = backdrop,
                     overview = obj.optString("overview").takeIf { it != "null" } ?: "",
                     year = date.take(4).takeIf { it.length == 4 },
-                    mediaType = type
+                    mediaType = type,
+                    detailUrl = "https://www.movy.sx/${if (type == MediaType.MOVIE) "movie" else "tv"}/$id"
                 ))
             }
         }
