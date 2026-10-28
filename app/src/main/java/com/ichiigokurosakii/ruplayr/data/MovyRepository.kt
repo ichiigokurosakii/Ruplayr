@@ -18,7 +18,8 @@ class MovyRepository {
         val specs = listOf(
             Triple("Trending this week", "trending/movie/week?language=en-US", MediaType.MOVIE),
             Triple("Popular movies", "movie/popular?language=en-US", MediaType.MOVIE),
-            Triple("Popular TV shows", "tv/popular?language=en-US", MediaType.TV)
+            Triple("Popular TV shows", "tv/popular?language=en-US", MediaType.TV),
+            Triple("Anime", "discover/tv?with_genres=16&with_origin_country=JP&sort_by=popularity.desc&language=en-US", MediaType.ANIME)
         )
         specs.mapNotNull { (title, endpoint, type) ->
             runCatching {
@@ -42,6 +43,11 @@ class MovyRepository {
 
     suspend fun details(item: MediaItem): MediaItem = withContext(Dispatchers.IO) {
         val kind = if (item.mediaType == MediaType.MOVIE) "movie" else "tv"
+        val movyKind = when (item.mediaType) {
+            MediaType.MOVIE -> "movie"
+            MediaType.ANIME -> "anime"
+            MediaType.TV -> "tv"
+        }
         runCatching {
             val obj = JSONObject(URL("$metadataBase/$kind/${item.id}?language=en-US").readText())
             val title = (if (kind == "movie") obj.optString("title") else obj.optString("name"))
@@ -55,9 +61,9 @@ class MovyRepository {
                 backdropUrl = backdropPath?.let { if (it.startsWith("http")) it else "https://image.tmdb.org/t/p/w1280$it" } ?: item.backdropUrl,
                 overview = obj.optString("overview").takeIf { it.isNotBlank() && it != "null" } ?: item.overview,
                 year = date.take(4).takeIf { it.length == 4 } ?: item.year,
-                detailUrl = "https://www.movy.sx/$kind/${item.id}"
+                detailUrl = "https://www.movy.sx/$movyKind/${item.id}"
             )
-        }.getOrDefault(item.copy(detailUrl = "https://www.movy.sx/$kind/${item.id}"))
+        }.getOrDefault(item.copy(detailUrl = "https://www.movy.sx/$movyKind/${item.id}"))
     }
 
     private fun parseResults(raw: String, type: MediaType): List<MediaItem> {
@@ -83,7 +89,11 @@ class MovyRepository {
                     overview = obj.optString("overview").takeIf { it != "null" } ?: "",
                     year = date.take(4).takeIf { it.length == 4 },
                     mediaType = type,
-                    detailUrl = "https://www.movy.sx/${if (type == MediaType.MOVIE) "movie" else "tv"}/$id"
+                    detailUrl = "https://www.movy.sx/${when (type) {
+                        MediaType.MOVIE -> "movie"
+                        MediaType.TV -> "tv"
+                        MediaType.ANIME -> "anime"
+                    }}/$id"
                 ))
             }
         }
