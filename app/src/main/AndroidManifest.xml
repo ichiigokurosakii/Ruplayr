@@ -2,6 +2,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:allowBackup="true"
+        android:icon="@drawable/ic_launcher"
         android:label="Ruplayr"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar"
