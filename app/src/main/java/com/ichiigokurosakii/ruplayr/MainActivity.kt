@@ -220,7 +220,12 @@ private fun RuplayrApp(
                             Text("RUPLAYR", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
                             Text("Movies, series & more", color = Muted, fontSize = 12.sp)
                         }
-                        IconButton(onClick = { selectedTab = "Search"; searchFocusRequester.requestFocus(); keyboardController?.show() }) {
+                        IconButton(onClick = {
+                                if (selectedTab == "Search") {
+                                    searchFocusRequester.requestFocus()
+                                    keyboardController?.show()
+                                } else selectedTab = "Search"
+                            }) {
                             Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.White)
                         }
                     }
