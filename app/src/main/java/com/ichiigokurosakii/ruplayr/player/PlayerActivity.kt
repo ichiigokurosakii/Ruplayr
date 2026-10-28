@@ -43,25 +43,14 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem as ExoMediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.PlaybackException
-import androidx.media3.common.Tracks
-import androidx.media3.common.MimeTypes
-import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.TrackSelectionDialogBuilder
 
 class PlayerActivity : ComponentActivity() {
     private var player: ExoPlayer? = null
     private var playbackError by mutableStateOf<String?>(null)
-    private var trackSelector: DefaultTrackSelector? = null
-    private var availableVideoQualities by mutableStateOf<List<VideoQuality>>(emptyList())
-
-    private data class VideoQuality(val width: Int, val height: Int) {
-        val label: String get() = "${height}p (${width}×${height})"
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -72,7 +61,6 @@ class PlayerActivity : ComponentActivity() {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
         val streamUrl = intent.getStringExtra(EXTRA_STREAM_URL).orEmpty()
-        val initialQuality = intent.getStringExtra(EXTRA_DEFAULT_QUALITY) ?: "Auto"
         if (streamUrl.isBlank()) {
             setContent {
                 Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
@@ -82,24 +70,13 @@ class PlayerActivity : ComponentActivity() {
             return
         }
 
-        val selector = DefaultTrackSelector(this)
-        trackSelector = selector
-        applyQuality(initialQuality, selector)
-
-        val httpFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Mobile Safari/537.36")
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(15_000)
-            .setReadTimeoutMs(30_000)
-            .setDefaultRequestProperties(mapOf(
-                "Referer" to "https://www.movy.sx/",
-                "Origin" to "https://www.movy.sx",
-                "Accept" to "*/*"
-            ))
-        val mediaSourceFactory = DefaultMediaSourceFactory(DefaultDataSource.Factory(this, httpFactory))
+        // Keep Media3's default media loading and track selection, as in the
+        // original player. Let Media3 try another available decoder if the
+        // preferred platform decoder fails to initialize.
+        val renderersFactory = DefaultRenderersFactory(this)
+            .setEnableDecoderFallback(true)
         player = ExoPlayer.Builder(this)
-            .setTrackSelector(selector)
-            .setMediaSourceFactory(mediaSourceFactory)
+            .setRenderersFactory(renderersFactory)
             .build()
             .apply {
                 addListener(object : androidx.media3.common.Player.Listener {
@@ -114,26 +91,9 @@ class PlayerActivity : ComponentActivity() {
                         } else ""
                         playbackError = "Playback failed: ${error.errorCodeName}\n${decoderHint}${cause.ifBlank { error.message.orEmpty() }}"
                     }
-                    override fun onTracksChanged(tracks: Tracks) {
-                        availableVideoQualities = tracks.groups
-                            .filter { it.type == C.TRACK_TYPE_VIDEO }
-                            .flatMap { group ->
-                                (0 until group.length).mapNotNull { index ->
-                                    val format = group.getTrackFormat(index)
-                                    if (format.width > 0 && format.height > 0) VideoQuality(format.width, format.height) else null
-                                }
-                            }
-                            .distinctBy { it.width to it.height }
-                            .sortedWith(compareByDescending<VideoQuality> { it.height }.thenByDescending { it.width })
-                    }
                     override fun onIsPlayingChanged(isPlaying: Boolean) { if (isPlaying) playbackError = null }
                 })
-                val mediaItemBuilder = ExoMediaItem.Builder().setUri(Uri.parse(streamUrl))
-                when {
-                    streamUrl.substringBefore('?').endsWith(".m3u8", ignoreCase = true) -> mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_M3U8)
-                    streamUrl.substringBefore('?').endsWith(".mpd", ignoreCase = true) -> mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_MPD)
-                }
-                setMediaItem(mediaItemBuilder.build())
+                setMediaItem(ExoMediaItem.fromUri(Uri.parse(streamUrl)))
                 prepare()
                 playWhenReady = true
             }
@@ -141,9 +101,7 @@ class PlayerActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 var settingsExpanded by remember { mutableStateOf(false) }
-                var qualityDialog by remember { mutableStateOf(false) }
                 var speedDialog by remember { mutableStateOf(false) }
-                var selectedQuality by remember { mutableStateOf(initialQuality) }
                 var controllerVisible by remember { mutableStateOf(true) }
                 Column(Modifier.fillMaxSize().background(Color.Black)) {
                     Box(Modifier.weight(1f).fillMaxWidth().background(Color.Black)) {
@@ -203,62 +161,17 @@ class PlayerActivity : ComponentActivity() {
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Video quality · $selectedQuality") },
-                                onClick = { settingsExpanded = false; qualityDialog = true }
-                            )
-                        }
-                    }
-                    if (qualityDialog) {
-                        AlertDialog(
-                            onDismissRequest = { qualityDialog = false },
-                            title = { Text("Video quality") },
-                            text = {
-                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    TextButton(
-                                        onClick = {
-                                            selectedQuality = "Auto"
-                                            trackSelector?.let { applyQuality("Auto", it) }
-                                            qualityDialog = false
-                                        },
-                                        modifier = Modifier.width(260.dp)
-                                    ) {
-                                        Text(if (selectedQuality == "Auto") "✓  Auto" else "Auto")
-                                    }
-                                    if (availableVideoQualities.isEmpty()) {
-                                        Text("Detecting qualities available in this stream…", modifier = Modifier.padding(8.dp))
-                                    } else {
-                                        availableVideoQualities.forEach { quality ->
-                                            val label = if (availableVideoQualities.size == 1) {
-                                                "Original · ${quality.width}×${quality.height}"
-                                            } else quality.label
-                                            TextButton(
-                                                onClick = {
-                                                    selectedQuality = label
-                                                    trackSelector?.let { selector ->
-                                                        selector.parameters = selector.buildUponParameters()
-                                                            .setMaxVideoSize(quality.width, quality.height)
-                                                            .build()
-                                                    }
-                                                    qualityDialog = false
-                                                },
-                                                modifier = Modifier.width(260.dp)
-                                            ) {
-                                                Text(if (selectedQuality == label) "✓  $label" else label)
-                                            }
-                                        }
-                                        if (availableVideoQualities.size == 1) {
-                                            Text(
-                                                "This stream provides only one video quality.",
-                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                                            )
-                                        }
+                                text = { Text("Video quality") },
+                                onClick = {
+                                    settingsExpanded = false
+                                    player?.let { active ->
+                                        TrackSelectionDialogBuilder(
+                                            this@PlayerActivity, "Video quality", active, C.TRACK_TYPE_VIDEO
+                                        ).setAllowAdaptiveSelections(true).build().show()
                                     }
                                 }
-                            },
-                            confirmButton = {
-                                TextButton(onClick = { qualityDialog = false }) { Text("Close") }
-                            }
-                        )
+                            )
+                        }
                     }
                     if (speedDialog) {
                         AlertDialog(
@@ -287,19 +200,6 @@ class PlayerActivity : ComponentActivity() {
         }
     }
 
-    private fun applyQuality(quality: String, selector: DefaultTrackSelector) {
-        val (width, height) = when (quality) {
-            "2160p" -> 3840 to 2160
-            "1080p" -> 1920 to 1080
-            "720p" -> 1280 to 720
-            "480p" -> 854 to 480
-            else -> Int.MAX_VALUE to Int.MAX_VALUE
-        }
-        selector.parameters = selector.buildUponParameters()
-            .setMaxVideoSize(width, height)
-            .build()
-    }
-
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) {
@@ -315,12 +215,10 @@ class PlayerActivity : ComponentActivity() {
         player?.release()
         player = null
         playbackError = null
-        trackSelector = null
         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
     companion object {
         const val EXTRA_STREAM_URL = "stream_url"
-        const val EXTRA_DEFAULT_QUALITY = "default_quality"
     }
 }
