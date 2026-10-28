@@ -120,8 +120,10 @@ internal object MovyResolver {
                                 val item = sources.optJSONObject(i) ?: continue
                                 val url = item.optString("url").ifBlank { item.optString("file") }.trim()
                                 if (!url.startsWith("http")) continue
-                                val quality = item.optString("quality").ifBlank { "Auto" }
-                                found.add(url to "Movy · $quality")
+                                val quality = item.optString("quality").ifBlank { "Auto quality" }
+                                val rawLanguage = item.optString("language").ifBlank { item.optString("lang") }
+                                val language = displayLanguage(rawLanguage)
+                                found.add(url to "${node.replaceFirstChar { it.uppercase() }} · $quality · $language")
                             }
                         }
                         val audio = json.optJSONArray("audio")
@@ -130,7 +132,8 @@ internal object MovyResolver {
                                 val item = audio.optJSONObject(i) ?: continue
                                 val url = item.optString("url").ifBlank { item.optString("file") }.trim()
                                 if (url.startsWith("http")) {
-                                    found.add(url to "Movy · " + item.optString("lang", "Auto"))
+                                    val language = displayLanguage(item.optString("language").ifBlank { item.optString("lang") })
+                                    found.add(url to "${node.replaceFirstChar { it.uppercase() }} · Audio · $language")
                                 }
                             }
                         }
@@ -144,6 +147,18 @@ internal object MovyResolver {
         val results = linkedMapOf<String, String>()
         nodeResults.flatten().forEach { (url, label) -> results.putIfAbsent(url, label) }
         return results.map { it.key to it.value }
+    }
+
+    private fun displayLanguage(value: String): String = when (value.trim().lowercase()) {
+        "en", "eng", "english" -> "English"
+        "hi", "hin", "hindi" -> "Hindi"
+        "es", "spa", "spanish" -> "Spanish"
+        "ja", "jpn", "japanese" -> "Japanese"
+        "ko", "kor", "korean" -> "Korean"
+        "fr", "fra", "french" -> "French"
+        "de", "deu", "german" -> "German"
+        "" -> "Language not specified"
+        else -> value.trim()
     }
 
     private suspend fun fetchMetadata(mediaType: String, tmdbId: Int): JSONObject? {
