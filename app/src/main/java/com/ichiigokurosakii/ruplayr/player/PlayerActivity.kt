@@ -7,21 +7,28 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem as ExoMediaItem
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
+import androidx.media3.ui.TrackSelectionDialogBuilder
 
 class PlayerActivity : ComponentActivity() {
     private var player: ExoPlayer? = null
+    private var trackSelector: DefaultTrackSelector? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,27 +50,47 @@ class PlayerActivity : ComponentActivity() {
             ))
         val dataSourceFactory = DefaultDataSource.Factory(this, httpFactory)
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
+        val selector = DefaultTrackSelector(this)
+        trackSelector = selector
 
         player = ExoPlayer.Builder(this)
+            .setTrackSelector(selector)
             .setMediaSourceFactory(mediaSourceFactory)
             .build()
             .apply {
                 setMediaItem(ExoMediaItem.fromUri(Uri.parse(streamUrl)))
+                // DefaultTrackSelector starts in adaptive/automatic mode unless the user overrides it.
                 prepare()
                 playWhenReady = true
             }
 
         setContent {
             MaterialTheme {
-                AndroidView(
-                    modifier = Modifier.fillMaxSize().background(Color.Black),
-                    factory = { context ->
-                        PlayerView(context).apply {
-                            useController = true
-                            player = this@PlayerActivity.player
+                Box(Modifier.fillMaxSize().background(Color.Black)) {
+                    AndroidView(
+                        modifier = Modifier.fillMaxSize(),
+                        factory = { context ->
+                            PlayerView(context).apply {
+                                useController = true
+                                player = this@PlayerActivity.player
+                            }
                         }
+                    )
+                    TextButton(
+                        onClick = {
+                            val activePlayer = player ?: return@TextButton
+                            TrackSelectionDialogBuilder(
+                                this,
+                                "Video quality",
+                                activePlayer,
+                                C.TRACK_TYPE_VIDEO
+                            ).setAllowAdaptiveSelections(true).build().show()
+                        },
+                        modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)
+                    ) {
+                        Text("Quality: Auto / Select", color = Color.White)
                     }
-                )
+                }
             }
         }
     }
@@ -72,6 +99,7 @@ class PlayerActivity : ComponentActivity() {
         super.onStop()
         player?.release()
         player = null
+        trackSelector = null
     }
 
     companion object {
