@@ -1,39 +1,23 @@
 package com.ichiigokurosakii.ruplayr
 
-import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,7 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.ichiigokurosakii.ruplayr.data.MediaItem
-import com.ichiigokurosakii.ruplayr.data.MediaType
+import com.ichiigokurosakii.ruplayr.data.MediaRow
 import com.ichiigokurosakii.ruplayr.data.MovyRepository
 import kotlinx.coroutines.launch
 
@@ -72,17 +56,37 @@ private fun RuplayrApp() {
     var selectedTab by remember { mutableStateOf("Home") }
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
+    var homeRows by remember { mutableStateOf<List<MediaRow>>(emptyList()) }
     var loading by remember { mutableStateOf(false) }
+    var homeLoading by remember { mutableStateOf(true) }
     var selected by remember { mutableStateOf<MediaItem?>(null) }
+    var detailsLoading by remember { mutableStateOf(false) }
 
-    MaterialTheme {
+    LaunchedEffect(Unit) {
+        homeRows = repository.homeRows()
+        homeLoading = false
+    }
+
+    fun openItem(item: MediaItem) {
+        selected = item
+        detailsLoading = true
+        scope.launch {
+            selected = repository.details(item)
+            detailsLoading = false
+        }
+    }
+
+    MaterialTheme(colorScheme = darkColorScheme(
+        background = Page, surface = Panel, primary = Accent,
+        onBackground = Color.White, onSurface = Color.White
+    )) {
         Surface(Modifier.fillMaxSize(), color = Page) {
             if (selected != null) {
-                DetailsScreen(item = selected!!, onBack = { selected = null })
+                DetailsScreen(item = selected!!, loading = detailsLoading, onBack = { selected = null })
             } else {
                 Column(Modifier.fillMaxSize().background(Page)) {
                     Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp),
+                        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -97,35 +101,35 @@ private fun RuplayrApp() {
 
                     when (selectedTab) {
                         "Search" -> SearchScreen(
-                            query = query, onQueryChange = { query = it },
-                            results = results, loading = loading, onSearch = {
+                            query = query,
+                            onQueryChange = { query = it },
+                            results = results,
+                            loading = loading,
+                            onSearch = {
                                 loading = true
-                                scope.launch {
-                                    results = repository.search(query)
-                                    loading = false
-                                }
-                            }, onSelect = { selected = it }
+                                scope.launch { results = repository.search(query); loading = false }
+                            },
+                            onSelect = ::openItem
                         )
                         "Settings" -> Column(Modifier.fillMaxSize().padding(24.dp)) {
                             Text("Settings", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                            Spacer(Modifier.height(12.dp))
-                            Text("Player: Media3 ExoPlayer", color = Muted)
-                            Text("Provider: Movy (integration in progress)", color = Muted)
+                            Spacer(Modifier.height(14.dp))
+                            Text("Default player: Media3 ExoPlayer", color = Muted)
+                            Spacer(Modifier.height(6.dp))
+                            Text("Provider: Movy", color = Muted)
+                            Spacer(Modifier.height(6.dp))
+                            Text("Stream extraction is still being integrated.", color = Muted)
                         }
                         else -> HomeScreen(
+                            rows = homeRows,
+                            loading = homeLoading,
                             onSearch = { selectedTab = "Search" },
-                            onBrowse = {
-                                query = it
-                                selectedTab = "Search"
-                                loading = true
-                                scope.launch { results = repository.search(it); loading = false }
-                            },
-                            onSelect = { selected = it }
+                            onSelect = ::openItem
                         )
                     }
 
                     Row(
-                        Modifier.fillMaxWidth().background(Panel).padding(vertical = 8.dp),
+                        Modifier.fillMaxWidth().background(Panel).padding(vertical = 6.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -140,10 +144,15 @@ private fun RuplayrApp() {
 }
 
 @Composable
-private fun HomeScreen(onSearch: () -> Unit, onBrowse: (String) -> Unit, onSelect: (MediaItem) -> Unit) {
+private fun HomeScreen(
+    rows: List<MediaRow>,
+    loading: Boolean,
+    onSearch: () -> Unit,
+    onSelect: (MediaItem) -> Unit
+) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 12.dp)) {
         Box(
-            Modifier.fillMaxWidth().height(310.dp).padding(horizontal = 16.dp).clip(RoundedCornerShape(24.dp))
+            Modifier.fillMaxWidth().height(270.dp).padding(horizontal = 16.dp).clip(RoundedCornerShape(24.dp))
                 .background(Brush.verticalGradient(listOf(Color(0xFF343047), Color(0xFF151923), Page))),
             contentAlignment = Alignment.BottomStart
         ) {
@@ -154,27 +163,31 @@ private fun HomeScreen(onSearch: () -> Unit, onBrowse: (String) -> Unit, onSelec
                 Spacer(Modifier.height(8.dp))
                 Text("Movies, shows and anime — all in one place.", color = Muted, fontSize = 14.sp)
                 Spacer(Modifier.height(18.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    ActionChip("Search titles", onSearch)
-                    ActionChip("Popular movies", { onBrowse("popular") })
-                }
+                ActionChip("Search titles", onSearch)
             }
         }
-        Spacer(Modifier.height(22.dp))
-        listOf("Trending", "Action", "Popular movies", "TV shows", "Anime").forEach { label ->
-            Column(Modifier.padding(bottom = 14.dp)) {
-                Text(label, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
-                LazyRow(contentPadding = PaddingValues(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(5) { index ->
-                        Box(Modifier.width(124.dp).height(178.dp).clip(RoundedCornerShape(12.dp)).background(Panel).clickable {
-                            onBrowse(when (label) {
-                                "Anime" -> "anime"
-                                "TV shows" -> "popular tv"
-                                "Action" -> "action"
-                                else -> "popular"
-                            })
-                        }, contentAlignment = Alignment.Center) {
-                            Text(if (index == 0) "Explore" else "Search", color = Muted, fontSize = 12.sp)
+        Spacer(Modifier.height(18.dp))
+        if (loading) {
+            Box(Modifier.fillMaxWidth().padding(28.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Accent) }
+        } else if (rows.isEmpty()) {
+            Text("Catalogue could not load. Check your connection and try again.", color = Muted, modifier = Modifier.padding(20.dp))
+        } else {
+            rows.forEach { row ->
+                Column(Modifier.padding(bottom = 18.dp)) {
+                    Text(row.title, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
+                    LazyRow(contentPadding = PaddingValues(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        items(row.items, key = { "${it.mediaType}-${it.id}" }) { item ->
+                            Column(Modifier.width(124.dp).clickable { onSelect(item) }) {
+                                AsyncImage(
+                                    model = item.posterUrl,
+                                    contentDescription = item.title,
+                                    modifier = Modifier.fillMaxWidth().height(178.dp).clip(RoundedCornerShape(12.dp)).background(Panel),
+                                    contentScale = ContentScale.Crop
+                                )
+                                Spacer(Modifier.height(7.dp))
+                                Text(item.title, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                item.year?.let { Text(it, color = Muted, fontSize = 11.sp) }
+                            }
                         }
                     }
                 }
@@ -195,10 +208,10 @@ private fun SearchScreen(
     Column(Modifier.fillMaxSize().padding(horizontal = 18.dp)) {
         Text("Search", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(14.dp))
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Panel).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Panel).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
             BasicTextField(
                 value = query, onValueChange = onQueryChange,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).padding(4.dp),
                 singleLine = true,
                 textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 16.sp),
                 decorationBox = { inner ->
@@ -209,12 +222,10 @@ private fun SearchScreen(
             IconButton(onClick = onSearch) { Icon(Icons.Default.Search, "Search", tint = Accent) }
         }
         Spacer(Modifier.height(12.dp))
-        if (loading) {
-            Box(Modifier.fillMaxWidth().padding(30.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Accent) }
-        } else if (results.isEmpty()) {
-            Text("Search for a title to get started.", color = Muted, modifier = Modifier.padding(top = 16.dp))
-        } else {
-            androidx.compose.foundation.lazy.LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        when {
+            loading -> Box(Modifier.fillMaxWidth().padding(30.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Accent) }
+            results.isEmpty() -> Text("Enter a title and tap search.", color = Muted, modifier = Modifier.padding(top = 16.dp))
+            else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 items(results, key = { "${it.mediaType}-${it.id}" }) { item ->
                     Row(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Panel).clickable { onSelect(item) }.padding(10.dp),
@@ -235,7 +246,7 @@ private fun SearchScreen(
 }
 
 @Composable
-private fun DetailsScreen(item: MediaItem, onBack: () -> Unit) {
+private fun DetailsScreen(item: MediaItem, loading: Boolean, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).background(Page)) {
         Box(Modifier.fillMaxWidth().height(330.dp)) {
             AsyncImage(model = item.backdropUrl ?: item.posterUrl, contentDescription = item.title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
@@ -246,11 +257,11 @@ private fun DetailsScreen(item: MediaItem, onBack: () -> Unit) {
                 Text(listOfNotNull(item.year, item.mediaType.name).joinToString("  •  "), color = Muted, modifier = Modifier.padding(top = 6.dp))
             }
         }
-        Text(item.overview.ifBlank { "More information and streaming availability will appear here as provider integration is completed." }, color = Color(0xFFE5E7EB), fontSize = 15.sp, lineHeight = 23.sp, modifier = Modifier.padding(20.dp))
+        Text(item.overview.ifBlank { "No overview is available for this title." }, color = Color(0xFFE5E7EB), fontSize = 15.sp, lineHeight = 23.sp, modifier = Modifier.padding(20.dp))
         Column(Modifier.padding(horizontal = 20.dp)) {
-            ActionChip("Find streams", { /* Source resolver will be connected in the next phase. */ })
-            Spacer(Modifier.height(14.dp))
-            Text("Stream extraction is not connected yet.", color = Muted, fontSize = 12.sp)
+            if (loading) CircularProgressIndicator(color = Accent)
+            Text("Movy source extraction is the next integration step.", color = Muted, fontSize = 12.sp)
+            Spacer(Modifier.height(20.dp))
         }
     }
 }
