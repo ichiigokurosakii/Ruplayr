@@ -1,0 +1,281 @@
+package com.ichiigokurosakii.ruplayr.data
+
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import org.jsoup.nodes.Document
+import org.json.JSONObject
+import java.net.URLEncoder
+import java.util.Base64
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.io.IOException
+import java.util.concurrent.TimeUnit
+
+/**
+ * Movy's player backend returns encrypted source lists from several nodes.
+ * This resolves those lists before CloudStream's normal extractor fallback.
+ */
+internal object MovyResolver {
+    private val http = OkHttpClient.Builder()
+        .connectTimeout(12, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
+        .callTimeout(18, TimeUnit.SECONDS)
+        .build()
+
+    private suspend fun httpGet(url: String): String = withContext(Dispatchers.IO) {
+        val builder = Request.Builder().url(url).get()
+        headers.forEach { (key, value) -> builder.header(key, value) }
+        http.newCall(builder.build()).execute().use { response ->
+            if (!response.isSuccessful) throw IOException("HTTP ${response.code} for $url")
+            response.body?.string().orEmpty()
+        }
+    }
+
+    private const val API = "https://api.wecollege.net"
+    private const val DB_API = "https://db.wecollege.net/3"
+    private const val REFERER = "https://www.movy.sx/"
+    private val nodes = listOf(
+        "miami", "boise", "vegas", "reno", "oakland", "seattle", "phoenix",
+        "atlanta", "portland", "austin", "dallas", "tampa", "orlando",
+        "munich", "berlin", "paris", "delhi", "cancun"
+    )
+    private val headers = mapOf(
+        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
+        "Referer" to REFERER,
+        "Origin" to "https://www.movy.sx",
+        "Accept" to "application/json, text/plain, */*"
+    )
+
+    suspend fun resolve(pageUrl: String, doc: Document): List<Pair<String, String>> {
+        val html = doc.html()
+        val tmdbId = findTmdbId(pageUrl, html, doc) ?: return emptyList()
+        val isMovie = pageUrl.contains("/movie/") ||
+            doc.selectFirst("meta[property='og:type']")?.attr("content") == "video.movie"
+        val mediaType = if (isMovie) "movie" else "tv"
+        val pageTitleRaw = doc.selectFirst("meta[property='og:title']")?.attr("content")
+            ?.takeIf { it.isNotBlank() } ?: doc.selectFirst("h1, .heading-name, .film-name")?.text()
+            ?: doc.title()
+        val pageTitle = pageTitleRaw.substringBefore(" | ").substringBefore(" - Episode")
+            .substringBefore(" - Season").substringBefore(" Season ").trim()
+        val pageYear = Regex("\\b(19\\d{2}|20\\d{2})\\b").find(
+            doc.selectFirst("meta[property='og:title']")?.attr("content").orEmpty() + " " +
+                doc.selectFirst("meta[name=description]")?.attr("content").orEmpty() + " " + html.take(30000)
+        )?.groupValues?.get(1).orEmpty()
+        val seasonEpisode = findSeasonEpisode(pageUrl, html, doc)
+
+        // The page's serialized Next.js state can contain stale/secondary IDs and
+        // display titles are not always TMDB-canonical. Ask Movy's own TMDB proxy
+        // for canonical title/year/IMDb/season metadata while fetching the seed.
+        val initial = coroutineScope {
+            val metadataTask = async { fetchMetadata(mediaType, tmdbId) }
+            val seedTask = async { fetchSeed(tmdbId) }
+            metadataTask.await() to seedTask.await()
+        }
+        val metadata = initial.first
+        val seed = initial.second ?: return emptyList()
+        val title = metadata?.optString(if (isMovie) "title" else "name")
+            ?.takeIf { it.isNotBlank() && it != "null" } ?: pageTitle
+        if (title.isBlank()) return emptyList()
+        val releaseDate = metadata?.optString(if (isMovie) "release_date" else "first_air_date").orEmpty()
+        val year = releaseDate.takeIf { it.length >= 4 }?.take(4) ?: pageYear
+        val imdbId = metadata?.optString("imdb_id").orEmpty().takeIf { it.startsWith("tt") }
+            ?: metadata?.optJSONObject("external_ids")?.optString("imdb_id")?.takeIf { it.startsWith("tt") }
+            ?: Regex("tt\\d{7,9}").find(html)?.value.orEmpty()
+
+        val params = linkedMapOf(
+            "title" to title,
+            "mediaType" to mediaType,
+            "year" to year,
+            "tmdbId" to tmdbId.toString(),
+            "imdbId" to imdbId,
+            "episodeId" to (seasonEpisode.second.coerceAtLeast(1)).toString(),
+            "seasonId" to (seasonEpisode.first.coerceAtLeast(1)).toString(),
+            "enc" to "2",
+            "seed" to seed
+        )
+        val totalSeasons = metadata?.optInt("number_of_seasons", 0)?.takeIf { it > 0 }?.toString()
+            ?: Regex("(?i)number_of_seasons[\\\"']?\\s*[:=]\\s*[\\\"']?(\\d+)")
+                .find(html)?.groupValues?.getOrNull(1)
+        if (!totalSeasons.isNullOrBlank()) params["totalSeasons"] = totalSeasons
+
+        // Query the independent source shards concurrently. Serial 12-second
+        // requests could otherwise leave playback spinning for several minutes.
+        val nodeResults = coroutineScope {
+            nodes.map { node ->
+                async {
+                    try {
+                        val query = params.entries.joinToString("&") {
+                            URLEncoder.encode(it.key, "UTF-8") + "=" + URLEncoder.encode(it.value, "UTF-8")
+                        }
+                        val response = httpGet("$API/$node/sources?$query").trim()
+                        val plain = decrypt(response, seed, tmdbId) ?: return@async emptyList<Pair<String, String>>()
+                        val json = JSONObject(plain)
+                        val found = mutableListOf<Pair<String, String>>()
+                        val sources = json.optJSONArray("sources")
+                        if (sources != null) {
+                            for (i in 0 until sources.length()) {
+                                val item = sources.optJSONObject(i) ?: continue
+                                val url = item.optString("url").ifBlank { item.optString("file") }.trim()
+                                if (!url.startsWith("http")) continue
+                                val quality = item.optString("quality").ifBlank { "Auto" }
+                                found.add(url to "Movy · $quality")
+                            }
+                        }
+                        val audio = json.optJSONArray("audio")
+                        if (audio != null) {
+                            for (i in 0 until audio.length()) {
+                                val item = audio.optJSONObject(i) ?: continue
+                                val url = item.optString("url").ifBlank { item.optString("file") }.trim()
+                                if (url.startsWith("http")) {
+                                    found.add(url to "Movy · " + item.optString("lang", "Auto"))
+                                }
+                            }
+                        }
+                        found
+                    } catch (_: Exception) {
+                        emptyList<Pair<String, String>>()
+                    }
+                }
+            }.awaitAll()
+        }
+        val results = linkedMapOf<String, String>()
+        nodeResults.flatten().forEach { (url, label) -> results.putIfAbsent(url, label) }
+        return results.map { it.key to it.value }
+    }
+
+    private suspend fun fetchMetadata(mediaType: String, tmdbId: Int): JSONObject? {
+        return try {
+            val url = "$DB_API/$mediaType/$tmdbId?append_to_response=external_ids&language=en-US"
+            val body = httpGet(url)
+            JSONObject(body).takeIf { it.optInt("id", 0) == tmdbId }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private suspend fun fetchSeed(tmdbId: Int): String? {
+        return try {
+            val body = httpGet("$API/seed?mediaId=$tmdbId")
+            JSONObject(body).optString("seed").takeIf { it.isNotBlank() && it != "null" }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun findTmdbId(pageUrl: String, html: String, doc: Document): Int? {
+        val path = try { java.net.URI(pageUrl).path.orEmpty() } catch (_: Exception) { pageUrl }
+        // Movy TV pages use /tv/{tmdbId}/{season}/{episode}; prefer that stable
+        // series ID over numeric IDs embedded in an episode's HTML.
+        Regex("^/(?:[a-z]{2}/)?(?:tv|show|series|anime)/(\\d+)(?:/|$)", RegexOption.IGNORE_CASE)
+            .find(path)?.groupValues?.getOrNull(1)?.toIntOrNull()
+            ?.takeIf { it > 0 }?.let { return it }
+
+        val explicitPatterns = listOf(
+            Regex("(?i)(?:tmdb[_-]?id|tmdbId|themoviedb[_-]?id)[\\\"'\\s:=]+(\\d{1,9})"),
+            Regex("(?i)[?&](?:tmdbId|tmdb_id|id)=(\\d{1,9})"),
+            Regex("(?i)data-(?:tmdb-id|tmdbid|id)=[\\\"'](\\d{1,9})[\\\"']")
+        )
+        for (pattern in explicitPatterns) {
+            pattern.find(html)?.groupValues?.getOrNull(1)?.toIntOrNull()?.takeIf { it > 0 }?.let { return it }
+        }
+        doc.select("[data-tmdb-id], [data-tmdbid], [data-id]").forEach { element ->
+            listOf("data-tmdb-id", "data-tmdbid", "data-id").forEach { key ->
+                element.attr(key).toIntOrNull()?.takeIf { it > 0 }?.let { return it }
+            }
+        }
+        Regex("-(\\d{2,9})/?$").find(path)?.groupValues?.getOrNull(1)?.toIntOrNull()?.let { return it }
+        return null
+    }
+
+    private fun findSeasonEpisode(pageUrl: String, html: String, doc: Document): Pair<Int, Int> {
+        val path = try { java.net.URI(pageUrl).path.orEmpty() } catch (_: Exception) { pageUrl }
+        // Resolve season/episode directly from Movy's numeric TV route before
+        // scanning page markup, which may contain unrelated episode numbers.
+        Regex("^/(?:[a-z]{2}/)?(?:tv|show|series|anime)/\\d+/(\\d+)/(\\d+)(?:/|$)", RegexOption.IGNORE_CASE)
+            .find(path)?.let { match ->
+                val season = match.groupValues[1].toIntOrNull()
+                val episode = match.groupValues[2].toIntOrNull()
+                if (season != null && episode != null && season > 0 && episode > 0) {
+                    return season to episode
+                }
+            }
+
+        val combined = pageUrl + " " + doc.title() + " " +
+            doc.selectFirst("h1, h2, .heading-name")?.text().orEmpty() + " " + html.take(50000)
+        val season = Regex("(?i)(?:season|\\bs)\\s*[-:#]?\\s*0*(\\d{1,2})")
+            .find(combined)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 1
+        val episode = Regex("(?i)(?:episode|\\bep\\.?|\\be)\\s*[-:#]?\\s*0*(\\d{1,3})")
+            .find(combined)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 1
+        return season to episode
+    }
+
+    private fun decrypt(encoded: String, seed: String, tmdbId: Int): String? {
+        return try {
+            val normalized = encoded.replace('-', '+').replace('_', '/')
+            val padded = normalized + "=".repeat((4 - normalized.length % 4) % 4)
+            val bytes = Base64.getDecoder().decode(padded)
+            val stream = keystream(seed, tmdbId, bytes.size)
+            for (i in bytes.indices) bytes[i] = (bytes[i].toInt() xor stream[i].toInt()).toByte()
+            if (bytes.size < 4 || bytes[0] != 109.toByte() || bytes[1] != 118.toByte() ||
+                bytes[2] != 109.toByte() || bytes[3] != 49.toByte()) return null
+            String(bytes, 4, bytes.size - 4, Charsets.UTF_8)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun mixHash(input: Int): Int {
+        var x = input
+        x = x xor (x ushr 16)
+        x *= 2246822507L.toInt()
+        x = x xor (x ushr 13)
+        x *= 3266489909L.toInt()
+        x = x xor (x ushr 16)
+        return x
+    }
+
+    private fun fnvSeed(seed: String): Int {
+        var value = 2166136261L.toInt()
+        seed.toByteArray(Charsets.UTF_8).forEach { byte ->
+            value = (value xor (byte.toInt() and 0xff)) * 16777619
+        }
+        return mixHash(value)
+    }
+
+    private fun keystream(seed: String, tmdbId: Int, size: Int): ByteArray {
+        val slots = IntArray(61)
+        val present = BooleanArray(61)
+        var i = mixHash(fnvSeed(seed) xor mixHash(tmdbId xor 2654435769L.toInt()))
+        repeat(8) { r ->
+            val n = Integer.remainderUnsigned(i, 61)
+            i = Integer.rotateLeft(i + 2654435769L.toInt(), 7 + (r and 7))
+            slots[n] = i xor mixHash(i)
+            present[n] = true
+            i = mixHash(i + n)
+        }
+        var acc = mixHash(i xor 2779096485L.toInt())
+        val out = ByteArray(size)
+        var offset = 0
+        var wordOffset = 0
+        while (offset < size) {
+            val r = Integer.remainderUnsigned(acc, 61)
+            val neg = if (present[r]) -1 else 0
+            val u = slots[r]
+            val d = 2654435769L.toInt() * (wordOffset + 1)
+            val v = acc xor (u xor d)
+            val g = v or (acc and (u xor d) and neg)
+            val rotated = Integer.rotateLeft(g + acc, r and 31) xor Integer.rotateLeft(acc, (r * 7) and 31)
+            acc = mixHash(rotated + 2654435769L.toInt())
+            slots[r] = acc
+            present[r] = true
+            repeat(4) { k ->
+                if (offset < size) out[offset++] = (acc ushr (8 * k)).toByte()
+            }
+            wordOffset++
+        }
+        return out
+    }
+}
