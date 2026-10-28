@@ -7,7 +7,6 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
@@ -15,7 +14,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem as ExoMediaItem
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 
 class PlayerActivity : ComponentActivity() {
@@ -33,11 +35,24 @@ class PlayerActivity : ComponentActivity() {
             return
         }
 
-        player = ExoPlayer.Builder(this).build().apply {
-            setMediaItem(ExoMediaItem.fromUri(Uri.parse(streamUrl)))
-            prepare()
-            playWhenReady = true
-        }
+        val httpFactory = DefaultHttpDataSource.Factory()
+            .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/134.0.0.0 Safari/537.36")
+            .setDefaultRequestProperties(mapOf(
+                "Referer" to "https://www.movy.sx/",
+                "Origin" to "https://www.movy.sx"
+            ))
+        val dataSourceFactory = DefaultDataSource.Factory(this, httpFactory)
+        val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
+
+        player = ExoPlayer.Builder(this)
+            .setMediaSourceFactory(mediaSourceFactory)
+            .build()
+            .apply {
+                setMediaItem(ExoMediaItem.fromUri(Uri.parse(streamUrl)))
+                prepare()
+                playWhenReady = true
+            }
+
         setContent {
             MaterialTheme {
                 AndroidView(
