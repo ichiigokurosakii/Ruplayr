@@ -40,11 +40,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem as ExoMediaItem
 import androidx.media3.common.PlaybackParameters
-import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.TrackSelectionDialogBuilder
 
@@ -71,21 +68,12 @@ class PlayerActivity : ComponentActivity() {
             return
         }
 
-        val httpFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/134.0.0.0 Safari/537.36")
-            .setDefaultRequestProperties(mapOf(
-                "Referer" to "https://www.movy.sx/",
-                "Origin" to "https://www.movy.sx"
-            ))
-        val dataSourceFactory = DefaultDataSource.Factory(this, httpFactory)
-        val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
         val selector = DefaultTrackSelector(this)
         trackSelector = selector
         applyQuality(initialQuality, selector)
 
         player = ExoPlayer.Builder(this)
             .setTrackSelector(selector)
-            .setMediaSourceFactory(mediaSourceFactory)
             .build()
             .apply {
                 setMediaItem(ExoMediaItem.fromUri(Uri.parse(streamUrl)))
@@ -99,6 +87,7 @@ class PlayerActivity : ComponentActivity() {
                 var qualityDialog by remember { mutableStateOf(false) }
                 var speedDialog by remember { mutableStateOf(false) }
                 var selectedQuality by remember { mutableStateOf(initialQuality) }
+                var controllerVisible by remember { mutableStateOf(true) }
                 Box(Modifier.fillMaxSize().background(Color.Black)) {
                     AndroidView(
                         modifier = Modifier.fillMaxSize(),
@@ -107,10 +96,16 @@ class PlayerActivity : ComponentActivity() {
                                 useController = true
                                 player = this@PlayerActivity.player
                                 keepScreenOn = true
+                                setControllerVisibilityListener { visibility ->
+                                    controllerVisible = visibility == View.VISIBLE
+                                }
+                                // The custom settings control below replaces the stock button,
+                                // but follows the controller's visibility instead of staying on-screen.
+                                findViewById<View>(androidx.media3.ui.R.id.exo_settings)?.visibility = View.GONE
                             }
                         }
                     )
-                    Box(Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = 58.dp)) {
+                    if (controllerVisible) Box(Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = 58.dp)) {
                         IconButton(
                             onClick = { settingsExpanded = true },
                             modifier = Modifier.background(Color(0xAA151923), RoundedCornerShape(28.dp))
