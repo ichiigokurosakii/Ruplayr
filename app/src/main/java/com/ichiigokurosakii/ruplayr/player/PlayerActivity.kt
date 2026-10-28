@@ -96,9 +96,9 @@ class PlayerActivity : ComponentActivity() {
                                 useController = true
                                 player = this@PlayerActivity.player
                                 keepScreenOn = true
-                                setControllerVisibilityListener { visibility ->
+                                setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility: Int ->
                                     controllerVisible = visibility == View.VISIBLE
-                                }
+                                })
                                 // The custom settings control below replaces the stock button,
                                 // but follows the controller's visibility instead of staying on-screen.
                                 findViewById<View>(androidx.media3.ui.R.id.exo_settings)?.visibility = View.GONE
