@@ -123,7 +123,11 @@ internal object MovyResolver {
                                 val quality = item.optString("quality").ifBlank { "Auto quality" }
                                 val rawLanguage = item.optString("language").ifBlank { item.optString("lang") }
                                 val language = displayLanguage(rawLanguage)
-                                found.add(url to "${node.replaceFirstChar { it.uppercase() }} · $quality · $language")
+                                val server = item.optString("server")
+                                    .ifBlank { item.optString("name") }
+                                    .ifBlank { item.optString("source") }
+                                    .ifBlank { node.replaceFirstChar { it.uppercase() } }
+                                found.add(url to "$server · $quality · $language")
                             }
                         }
                         val audio = json.optJSONArray("audio")
@@ -133,7 +137,11 @@ internal object MovyResolver {
                                 val url = item.optString("url").ifBlank { item.optString("file") }.trim()
                                 if (url.startsWith("http")) {
                                     val language = displayLanguage(item.optString("language").ifBlank { item.optString("lang") })
-                                    found.add(url to "${node.replaceFirstChar { it.uppercase() }} · Audio · $language")
+                                    val server = item.optString("server")
+                                        .ifBlank { item.optString("name") }
+                                        .ifBlank { item.optString("source") }
+                                        .ifBlank { node.replaceFirstChar { it.uppercase() } }
+                                    found.add(url to "$server · Audio · $language")
                                 }
                             }
                         }
