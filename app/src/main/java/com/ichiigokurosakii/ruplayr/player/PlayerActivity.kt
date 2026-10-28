@@ -48,6 +48,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.TrackSelectionDialogBuilder
 
+// FFmpeg extension renderer is enabled to handle streams rejected by hardware decoders.
 class PlayerActivity : ComponentActivity() {
     private var player: ExoPlayer? = null
     private var playbackError by mutableStateOf<String?>(null)
