@@ -18,8 +18,7 @@ class MovyRepository {
         val specs = listOf(
             Triple("Trending this week", "trending/movie/week?language=en-US", MediaType.MOVIE),
             Triple("Popular movies", "movie/popular?language=en-US", MediaType.MOVIE),
-            Triple("Popular TV shows", "tv/popular?language=en-US", MediaType.TV),
-            Triple("Action movies", "discover/movie?with_genres=28&sort_by=popularity.desc&language=en-US", MediaType.MOVIE)
+            Triple("Popular TV shows", "tv/popular?language=en-US", MediaType.TV)
         )
         specs.mapNotNull { (title, endpoint, type) ->
             runCatching {
