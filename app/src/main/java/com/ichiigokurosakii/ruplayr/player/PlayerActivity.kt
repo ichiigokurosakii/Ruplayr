@@ -40,13 +40,18 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem as ExoMediaItem
 import androidx.media3.common.PlaybackParameters
+import androidx.media3.common.MimeTypes
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.TrackSelectionDialogBuilder
 
 class PlayerActivity : ComponentActivity() {
     private var player: ExoPlayer? = null
+    private var playbackError by mutableStateOf<String?>(null)
     private var trackSelector: DefaultTrackSelector? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -72,11 +77,31 @@ class PlayerActivity : ComponentActivity() {
         trackSelector = selector
         applyQuality(initialQuality, selector)
 
+        val httpFactory = DefaultHttpDataSource.Factory()
+            .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/134.0.0.0 Safari/537.36")
+            .setDefaultRequestProperties(mapOf(
+                "Referer" to "https://www.movy.sx/",
+                "Origin" to "https://www.movy.sx",
+                "Accept" to "*/*"
+            ))
+        val mediaSourceFactory = DefaultMediaSourceFactory(DefaultDataSource.Factory(this, httpFactory))
         player = ExoPlayer.Builder(this)
             .setTrackSelector(selector)
+            .setMediaSourceFactory(mediaSourceFactory)
             .build()
             .apply {
-                setMediaItem(ExoMediaItem.fromUri(Uri.parse(streamUrl)))
+                addListener(object : androidx.media3.common.Player.Listener {
+                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                        playbackError = "Playback failed: ${error.errorCodeName}\n${error.message.orEmpty()}"
+                    }
+                    override fun onRenderedFirstFrame() { playbackError = null }
+                })
+                val mediaItemBuilder = ExoMediaItem.Builder().setUri(Uri.parse(streamUrl))
+                when {
+                    streamUrl.substringBefore('?').endsWith(".m3u8", ignoreCase = true) -> mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_M3U8)
+                    streamUrl.substringBefore('?').endsWith(".mpd", ignoreCase = true) -> mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_MPD)
+                }
+                setMediaItem(mediaItemBuilder.build())
                 prepare()
                 playWhenReady = true
             }
@@ -105,7 +130,12 @@ class PlayerActivity : ComponentActivity() {
                             }
                         }
                     )
-                    if (controllerVisible) Box(Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = 58.dp)) {
+                    if (playbackError != null) {
+                        Box(Modifier.align(Alignment.Center).padding(24.dp)) {
+                            Text(playbackError.orEmpty(), color = Color.White)
+                        }
+                    }
+                    if (controllerVisible) Box(Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 6.dp)) {
                         IconButton(
                             onClick = { settingsExpanded = true },
                             modifier = Modifier.background(Color(0xAA151923), RoundedCornerShape(28.dp))
@@ -216,6 +246,7 @@ class PlayerActivity : ComponentActivity() {
         super.onStop()
         player?.release()
         player = null
+        playbackError = null
         trackSelector = null
         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
