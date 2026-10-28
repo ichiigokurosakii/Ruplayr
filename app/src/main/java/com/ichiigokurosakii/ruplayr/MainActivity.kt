@@ -321,10 +321,11 @@ private fun HomeScreen(
             Column(Modifier.align(Alignment.BottomStart).padding(start = 20.dp, end = 20.dp, bottom = 22.dp)) {
                 Text("FEATURED", color = Color(0xFFC4B5FD), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
                 Text(featured?.title ?: "Discover something great", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Row(Modifier.fillMaxWidth().padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.fillMaxWidth().padding(top = 14.dp).height(48.dp)) {
                     Button(
                         onClick = { featured?.let(onPlayFeatured) },
                         enabled = featured != null,
+                        modifier = Modifier.align(Alignment.Center),
                         colors = ButtonDefaults.buttonColors(containerColor = Accent),
                         shape = RoundedCornerShape(10.dp)
                     ) {
@@ -332,10 +333,10 @@ private fun HomeScreen(
                         Spacer(Modifier.width(5.dp))
                         Text("Play")
                     }
-                    Spacer(Modifier.weight(1f))
                     OutlinedButton(
                         onClick = { featured?.let(onSelect) },
                         enabled = featured != null,
+                        modifier = Modifier.align(Alignment.CenterEnd),
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
                     ) { Text("Details") }
@@ -471,7 +472,7 @@ private fun DetailsScreen(
                             verticalAlignment = Alignment.Top
                         ) {
                             AsyncImage(
-                                model = item.backdropUrl ?: item.posterUrl,
+                                model = item.posterUrl ?: item.backdropUrl,
                                 contentDescription = episode.name,
                                 modifier = Modifier.width(116.dp).height(76.dp).clip(RoundedCornerShape(8.dp)),
                                 contentScale = ContentScale.Crop
