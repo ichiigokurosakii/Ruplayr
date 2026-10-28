@@ -74,6 +74,7 @@ class PlayerActivity : ComponentActivity() {
         // original player. Let Media3 try another available decoder if the
         // preferred platform decoder fails to initialize.
         val renderersFactory = DefaultRenderersFactory(this)
+            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
             .setEnableDecoderFallback(true)
         player = ExoPlayer.Builder(this)
             .setRenderersFactory(renderersFactory)
