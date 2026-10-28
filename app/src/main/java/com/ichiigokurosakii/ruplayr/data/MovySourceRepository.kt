@@ -9,9 +9,12 @@ import org.json.JSONObject
 import java.io.IOException
 import java.net.URL
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.ConcurrentHashMap
 
 /** Adapts Movy's encrypted source backend for the standalone app. */
 class MovySourceRepository {
+    private val sourceCache = ConcurrentHashMap<String, List<MovySource>>()
+    private val episodeCache = ConcurrentHashMap<String, List<EpisodeItem>>()
     private val client = OkHttpClient.Builder()
         .connectTimeout(12, TimeUnit.SECONDS)
         .readTimeout(18, TimeUnit.SECONDS)
@@ -21,6 +24,7 @@ class MovySourceRepository {
     suspend fun findSources(item: MediaItem): List<MovySource> = withContext(Dispatchers.IO) {
         val kind = if (item.mediaType == MediaType.MOVIE) "movie" else "tv"
         val pageUrl = item.detailUrl ?: "https://www.movy.sx/$kind/${item.id}"
+        sourceCache[pageUrl]?.let { return@withContext it }
         val headers = mapOf(
             "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
             "Referer" to "https://www.movy.sx/",
@@ -37,7 +41,11 @@ class MovySourceRepository {
             }
             val document = Jsoup.parse(html, pageUrl)
             val resolved = MovyResolver.resolve(pageUrl, document)
-            if (resolved.isNotEmpty()) return@withContext resolved.map { MovySource(it.first, it.second) }
+            if (resolved.isNotEmpty()) {
+                val cached = resolved.map { MovySource(it.first, it.second) }
+                sourceCache[pageUrl] = cached
+                return@withContext cached
+            }
 
             // Fallback only accepts direct media files. Embedded webpages need a
             // dedicated extractor and are deliberately not handed to ExoPlayer.
@@ -54,7 +62,9 @@ class MovySourceRepository {
                     direct.putIfAbsent(url, element.text().trim().ifBlank { "Direct stream" })
                 }
             }
-            direct.map { MovySource(it.key, it.value) }
+            val result = direct.map { MovySource(it.key, it.value) }
+            if (result.isNotEmpty()) sourceCache[pageUrl] = result
+            result
         } catch (_: Exception) {
             emptyList()
         }
@@ -62,6 +72,7 @@ class MovySourceRepository {
 
     suspend fun episodes(item: MediaItem): List<EpisodeItem> = withContext(Dispatchers.IO) {
         if (item.mediaType == MediaType.MOVIE) return@withContext emptyList()
+        episodeCache[item.id]?.let { return@withContext it }
         val headers = mapOf(
             "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
             "Referer" to "https://www.movy.sx/",
@@ -103,7 +114,9 @@ class MovySourceRepository {
                     )
                 }
             }
-            all.sortedWith(compareBy({ it.season }, { it.episode }))
+            all.sortedWith(compareBy({ it.season }, { it.episode })).also {
+                if (it.isNotEmpty()) episodeCache[item.id] = it
+            }
         } catch (_: Exception) {
             emptyList()
         }
