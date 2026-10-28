@@ -14,6 +14,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
@@ -58,12 +64,16 @@ class MainActivity : ComponentActivity() {
         setContent {
             RuplayrApp(
                 lastPlayed = { id -> getSharedPreferences("playback", MODE_PRIVATE).getString("last_$id", null) },
+                defaultQuality = getSharedPreferences("playback", MODE_PRIVATE).getString("default_quality", "Auto") ?: "Auto",
+                saveDefaultQuality = { quality -> getSharedPreferences("playback", MODE_PRIVATE).edit().putString("default_quality", quality).apply() },
                 saveLastPlayed = { id, episode ->
                     getSharedPreferences("playback", MODE_PRIVATE).edit()
                         .putString("last_$id", "${episode.season}:${episode.episode}").apply()
                 },
                 onPlay = { source ->
-                    startActivity(Intent(this, PlayerActivity::class.java).putExtra(PlayerActivity.EXTRA_STREAM_URL, source.url))
+                    startActivity(Intent(this, PlayerActivity::class.java)
+                        .putExtra(PlayerActivity.EXTRA_STREAM_URL, source.url)
+                        .putExtra(PlayerActivity.EXTRA_DEFAULT_QUALITY, getSharedPreferences("playback", MODE_PRIVATE).getString("default_quality", "Auto") ?: "Auto"))
                 }
             )
         }
@@ -73,6 +83,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun RuplayrApp(
     lastPlayed: (String) -> String?,
+    defaultQuality: String,
+    saveDefaultQuality: (String) -> Unit,
     saveLastPlayed: (String, EpisodeItem) -> Unit,
     onPlay: (MovySource) -> Unit
 ) {
@@ -94,6 +106,8 @@ private fun RuplayrApp(
     var episodes by remember { mutableStateOf<List<EpisodeItem>>(emptyList()) }
     var selectedSeason by remember { mutableIntStateOf(1) }
     var activeEpisode by remember { mutableStateOf<EpisodeItem?>(null) }
+    val searchFocusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     LaunchedEffect(Unit) {
         homeRows = repository.homeRows()
@@ -206,7 +220,7 @@ private fun RuplayrApp(
                             Text("RUPLAYR", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
                             Text("Movies, series & more", color = Muted, fontSize = 12.sp)
                         }
-                        IconButton(onClick = { selectedTab = "Search" }) {
+                        IconButton(onClick = { selectedTab = "Search"; searchFocusRequester.requestFocus(); keyboardController?.show() }) {
                             Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.White)
                         }
                     }
@@ -214,6 +228,7 @@ private fun RuplayrApp(
                         when (selectedTab) {
                             "Search" -> SearchScreen(
                                 query = query, onQueryChange = { query = it },
+                                focusRequester = searchFocusRequester,
                                 results = results, loading = loading,
                                 onSearch = {
                                     loading = true
@@ -223,12 +238,24 @@ private fun RuplayrApp(
                             )
                             "Settings" -> Column(Modifier.fillMaxSize().padding(24.dp)) {
                                 Text("Settings", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                                Spacer(Modifier.height(14.dp))
-                                Text("Default player: Media3 ExoPlayer", color = Muted)
-                                Spacer(Modifier.height(6.dp))
-                                Text("Provider: Movy", color = Muted)
-                                Spacer(Modifier.height(6.dp))
-                                Text("Adaptive quality is automatic; supported streams offer manual quality selection in the player.", color = Muted)
+                                Spacer(Modifier.height(20.dp))
+                                Text("Default quality", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                                Spacer(Modifier.height(8.dp))
+                                var qualityMenu by remember { mutableStateOf(false) }
+                                Box {
+                                    OutlinedButton(onClick = { qualityMenu = true }, modifier = Modifier.fillMaxWidth()) {
+                                        Text(defaultQuality, modifier = Modifier.weight(1f), color = Color.White)
+                                        Text("⌄", color = Color.White)
+                                    }
+                                    DropdownMenu(expanded = qualityMenu, onDismissRequest = { qualityMenu = false }) {
+                                        listOf("Auto", "2160p", "1080p", "720p", "480p").forEach { quality ->
+                                            DropdownMenuItem(text = { Text(quality) }, onClick = {
+                                                saveDefaultQuality(quality)
+                                                qualityMenu = false
+                                            })
+                                        }
+                                    }
+                                }
                             }
                             else -> HomeScreen(
                                 rows = homeRows, loading = homeLoading,
@@ -244,7 +271,12 @@ private fun RuplayrApp(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         IconButton(onClick = { selectedTab = "Home" }) { Icon(Icons.Default.Home, "Home", tint = if (selectedTab == "Home") Accent else Muted) }
-                        IconButton(onClick = { selectedTab = "Search" }) { Icon(Icons.Default.Search, "Search", tint = if (selectedTab == "Search") Accent else Muted) }
+                        IconButton(onClick = {
+                            if (selectedTab == "Search") {
+                                searchFocusRequester.requestFocus()
+                                keyboardController?.show()
+                            } else selectedTab = "Search"
+                        }) { Icon(Icons.Default.Search, "Search", tint = if (selectedTab == "Search") Accent else Muted) }
                         IconButton(onClick = { selectedTab = "Settings" }) { Icon(Icons.Default.Settings, "Settings", tint = if (selectedTab == "Settings") Accent else Muted) }
                     }
                 }
@@ -301,7 +333,7 @@ private fun HomeScreen(
     onSelect: (MediaItem) -> Unit,
     onPlayFeatured: (MediaItem) -> Unit
 ) {
-    val featured = rows.firstOrNull()?.items?.firstOrNull()
+    val featured = remember(rows) { rows.flatMap { it.items }.distinctBy { it.mediaType.name + "-" + it.id }.randomOrNull() }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 12.dp)) {
         Box(
             Modifier.fillMaxWidth().height(300.dp).padding(horizontal = 12.dp)
@@ -368,6 +400,7 @@ private fun HomeScreen(
 private fun SearchScreen(
     query: String,
     onQueryChange: (String) -> Unit,
+    focusRequester: FocusRequester,
     results: List<MediaItem>,
     loading: Boolean,
     onSearch: () -> Unit,
@@ -378,7 +411,11 @@ private fun SearchScreen(
         Spacer(Modifier.height(14.dp))
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Panel).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
             BasicTextField(
-                value = query, onValueChange = onQueryChange, modifier = Modifier.weight(1f).padding(4.dp), singleLine = true,
+                value = query, onValueChange = onQueryChange,
+                modifier = Modifier.weight(1f).padding(4.dp).focusRequester(focusRequester),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { onSearch() }),
                 textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 16.sp),
                 decorationBox = { inner -> if (query.isEmpty()) Text("Search movies or TV shows…", color = Muted); inner() }
             )
