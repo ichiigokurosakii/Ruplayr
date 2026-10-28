@@ -20,8 +20,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -50,11 +48,13 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.TrackSelectionDialogBuilder
+import android.widget.PopupMenu
 
 // FFmpeg extension renderer is enabled to handle streams rejected by hardware decoders.
 class PlayerActivity : ComponentActivity() {
     private var player: ExoPlayer? = null
     private var playbackError by mutableStateOf<String?>(null)
+    private var resumeAfterPause = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -124,7 +124,6 @@ class PlayerActivity : ComponentActivity() {
 
         setContent {
             MaterialTheme {
-                var settingsExpanded by remember { mutableStateOf(false) }
                 var speedDialog by remember { mutableStateOf(false) }
                 var controllerVisible by remember { mutableStateOf(true) }
                 Column(Modifier.fillMaxSize().background(Color.Black)) {
@@ -142,7 +141,23 @@ class PlayerActivity : ComponentActivity() {
                                     // Keep settings in the native player controller, not a separate bar.
                                     findViewById<View>(androidx.media3.ui.R.id.exo_settings)?.apply {
                                         visibility = View.VISIBLE
-                                        setOnClickListener { settingsExpanded = true }
+                                        setOnClickListener { anchor ->
+                                            val active = this@PlayerActivity.player ?: return@setOnClickListener
+                                            PopupMenu(this@PlayerActivity, anchor).apply {
+                                                menu.add(0, 1, 0, "Playback speed")
+                                                menu.add(0, 2, 1, "Audio tracks")
+                                                menu.add(0, 3, 2, "Video quality")
+                                                setOnMenuItemClickListener { item ->
+                                                    when (item.itemId) {
+                                                        1 -> speedDialog = true
+                                                        2 -> TrackSelectionDialogBuilder(this@PlayerActivity, "Audio tracks", active, C.TRACK_TYPE_AUDIO).build().show()
+                                                        3 -> TrackSelectionDialogBuilder(this@PlayerActivity, "Video quality", active, C.TRACK_TYPE_VIDEO).setAllowAdaptiveSelections(true).build().show()
+                                                    }
+                                                    true
+                                                }
+                                                show()
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -164,39 +179,6 @@ class PlayerActivity : ComponentActivity() {
                                 }) { Text("Retry playback") }
                             }
                         }
-                        DropdownMenu(
-                            expanded = settingsExpanded,
-                            onDismissRequest = { settingsExpanded = false },
-                            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 64.dp)
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Playback speed") },
-                                onClick = { settingsExpanded = false; speedDialog = true }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Audio tracks") },
-                                onClick = {
-                                    settingsExpanded = false
-                                    player?.let { active ->
-                                        TrackSelectionDialogBuilder(
-                                            this@PlayerActivity, "Audio tracks", active, C.TRACK_TYPE_AUDIO
-                                        ).build().show()
-                                    }
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Video quality") },
-                                onClick = {
-                                    settingsExpanded = false
-                                    player?.let { active ->
-                                        TrackSelectionDialogBuilder(
-                                            this@PlayerActivity, "Video quality", active, C.TRACK_TYPE_VIDEO
-                                        ).setAllowAdaptiveSelections(true).build().show()
-                                    }
-                                }
-                            )
-                        }
-                    }
                     if (speedDialog) {
                         AlertDialog(
                             onDismissRequest = { speedDialog = false },
@@ -234,12 +216,26 @@ class PlayerActivity : ComponentActivity() {
         }
     }
 
-    override fun onStop() {
-        super.onStop()
+    override fun onPause() {
+        resumeAfterPause = player?.playWhenReady == true
+        player?.pause()
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (resumeAfterPause) {
+            player?.playWhenReady = true
+            resumeAfterPause = false
+        }
+    }
+
+    override fun onDestroy() {
         player?.release()
         player = null
         playbackError = null
         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        super.onDestroy()
     }
 
     companion object {
