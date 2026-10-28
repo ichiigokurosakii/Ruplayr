@@ -80,11 +80,11 @@ class PlayerActivity : ComponentActivity() {
                         onClick = {
                             val activePlayer = player ?: return@TextButton
                             TrackSelectionDialogBuilder(
-                                this,
+                                this@PlayerActivity,
                                 "Video quality",
                                 activePlayer,
                                 C.TRACK_TYPE_VIDEO
-                            ).setAllowAdaptiveSelections(true).build().show()
+                            ).build().show()
                         },
                         modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)
                     ) {
