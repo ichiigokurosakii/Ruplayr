@@ -122,12 +122,10 @@ internal object MovyResolver {
                                 if (!url.startsWith("http")) continue
                                 val quality = item.optString("quality").ifBlank { "Auto quality" }
                                 val rawLanguage = item.optString("language").ifBlank { item.optString("lang") }
-                                val language = displayLanguage(rawLanguage)
-                                val server = item.optString("server")
-                                    .ifBlank { item.optString("name") }
-                                    .ifBlank { item.optString("source") }
-                                    .ifBlank { node.replaceFirstChar { it.uppercase() } }
-                                found.add(url to "$server · $quality · $language")
+                                val language = displayLanguage(rawLanguage).takeIf { it.isNotBlank() }
+                                val details = listOfNotNull(quality.takeIf { it.isNotBlank() }, language)
+                                    .joinToString(" · ").ifBlank { "Auto" }
+                                found.add(url to details)
                             }
                         }
                         val audio = json.optJSONArray("audio")
@@ -137,11 +135,8 @@ internal object MovyResolver {
                                 val url = item.optString("url").ifBlank { item.optString("file") }.trim()
                                 if (url.startsWith("http")) {
                                     val language = displayLanguage(item.optString("language").ifBlank { item.optString("lang") })
-                                    val server = item.optString("server")
-                                        .ifBlank { item.optString("name") }
-                                        .ifBlank { item.optString("source") }
-                                        .ifBlank { node.replaceFirstChar { it.uppercase() } }
-                                    found.add(url to "$server · Audio · $language")
+                                        .takeIf { it.isNotBlank() }
+                                    found.add(url to listOfNotNull("Audio", language).joinToString(" · "))
                                 }
                             }
                         }
@@ -153,7 +148,13 @@ internal object MovyResolver {
             }.awaitAll()
         }
         val results = linkedMapOf<String, String>()
-        nodeResults.flatten().forEach { (url, label) -> results.putIfAbsent(url, label) }
+        var serverNumber = 0
+        nodeResults.forEach { entries ->
+            if (entries.isNotEmpty()) serverNumber++
+            entries.forEach { (url, details) ->
+                results.putIfAbsent(url, "Server $serverNumber · $details")
+            }
+        }
         return results.map { it.key to it.value }
     }
 
@@ -165,7 +166,7 @@ internal object MovyResolver {
         "ko", "kor", "korean" -> "Korean"
         "fr", "fra", "french" -> "French"
         "de", "deu", "german" -> "German"
-        "" -> "Language not specified"
+        "" -> ""
         else -> value.trim()
     }
 
