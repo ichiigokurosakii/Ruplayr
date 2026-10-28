@@ -94,7 +94,7 @@ class PlayerActivity : ComponentActivity() {
                     override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                         playbackError = "Playback failed: ${error.errorCodeName}\n${error.message.orEmpty()}"
                     }
-                    override fun onRenderedFirstFrame() { playbackError = null }
+                    override fun onIsPlayingChanged(isPlaying: Boolean) { if (isPlaying) playbackError = null }
                 })
                 val mediaItemBuilder = ExoMediaItem.Builder().setUri(Uri.parse(streamUrl))
                 when {
