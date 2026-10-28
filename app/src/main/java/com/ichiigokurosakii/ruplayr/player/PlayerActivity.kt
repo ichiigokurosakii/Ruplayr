@@ -42,6 +42,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem as ExoMediaItem
 import androidx.media3.common.PlaybackParameters
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Tracks
 import androidx.media3.common.MimeTypes
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
@@ -55,6 +57,11 @@ class PlayerActivity : ComponentActivity() {
     private var player: ExoPlayer? = null
     private var playbackError by mutableStateOf<String?>(null)
     private var trackSelector: DefaultTrackSelector? = null
+    private var availableVideoQualities by mutableStateOf<List<VideoQuality>>(emptyList())
+
+    private data class VideoQuality(val width: Int, val height: Int) {
+        val label: String get() = "${height}p (${width}×${height})"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -96,13 +103,28 @@ class PlayerActivity : ComponentActivity() {
             .build()
             .apply {
                 addListener(object : androidx.media3.common.Player.Listener {
-                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                    override fun onPlayerError(error: PlaybackException) {
                         val cause = generateSequence<Throwable>(error) { it.cause }
                             .take(5)
                             .mapNotNull { it.message?.takeIf(String::isNotBlank) }
                             .distinct()
                             .joinToString("\n")
-                        playbackError = "Playback failed: ${error.errorCodeName}\n${cause.ifBlank { error.message.orEmpty() }}"
+                        val decoderHint = if (error.errorCode == PlaybackException.ERROR_CODE_DECODER_INIT_FAILED) {
+                            "The device could not initialize a decoder for this video's format. It may exceed the phone's supported resolution or codec profile. Try another source or a lower-resolution stream if one is available.\n\n"
+                        } else ""
+                        playbackError = "Playback failed: ${error.errorCodeName}\n${decoderHint}${cause.ifBlank { error.message.orEmpty() }}"
+                    }
+                    override fun onTracksChanged(tracks: Tracks) {
+                        availableVideoQualities = tracks.groups
+                            .filter { it.type == C.TRACK_TYPE_VIDEO }
+                            .flatMap { group ->
+                                (0 until group.length).mapNotNull { index ->
+                                    val format = group.getTrackFormat(index)
+                                    if (format.width > 0 && format.height > 0) VideoQuality(format.width, format.height) else null
+                                }
+                            }
+                            .distinctBy { it.width to it.height }
+                            .sortedWith(compareByDescending<VideoQuality> { it.height }.thenByDescending { it.width })
                     }
                     override fun onIsPlayingChanged(isPlaying: Boolean) { if (isPlaying) playbackError = null }
                 })
@@ -135,8 +157,11 @@ class PlayerActivity : ComponentActivity() {
                                     setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility: Int ->
                                         controllerVisible = visibility == View.VISIBLE
                                     })
-                                    // Settings live in the dedicated strip below the timeline.
-                                    findViewById<View>(androidx.media3.ui.R.id.exo_settings)?.visibility = View.GONE
+                                    // Keep settings in the native player controller, not a separate bar.
+                                    findViewById<View>(androidx.media3.ui.R.id.exo_settings)?.apply {
+                                        visibility = View.VISIBLE
+                                        setOnClickListener { settingsExpanded = true }
+                                    }
                                 }
                             }
                         )
@@ -158,44 +183,30 @@ class PlayerActivity : ComponentActivity() {
                             }
                         }
                     }
-                    if (controllerVisible) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().height(52.dp).background(Color(0xFF101319)).padding(horizontal = 8.dp),
-                            horizontalArrangement = Arrangement.End,
-                            verticalAlignment = Alignment.CenterVertically
+                        DropdownMenu(
+                            expanded = settingsExpanded,
+                            onDismissRequest = { settingsExpanded = false },
+                            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 64.dp)
                         ) {
-                            Box {
-                                IconButton(
-                                    onClick = { settingsExpanded = true },
-                                    modifier = Modifier.background(Color(0xAA252B36), RoundedCornerShape(28.dp))
-                                ) {
-                                    Icon(Icons.Default.Settings, contentDescription = "Player settings", tint = Color.White)
+                            DropdownMenuItem(
+                                text = { Text("Playback speed") },
+                                onClick = { settingsExpanded = false; speedDialog = true }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Audio tracks") },
+                                onClick = {
+                                    settingsExpanded = false
+                                    player?.let { active ->
+                                        TrackSelectionDialogBuilder(
+                                            this@PlayerActivity, "Audio tracks", active, C.TRACK_TYPE_AUDIO
+                                        ).build().show()
+                                    }
                                 }
-                                DropdownMenu(
-                                    expanded = settingsExpanded,
-                                    onDismissRequest = { settingsExpanded = false }
-                                ) {
-                                    DropdownMenuItem(
-                                        text = { Text("Playback speed") },
-                                        onClick = { settingsExpanded = false; speedDialog = true }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("Audio tracks") },
-                                        onClick = {
-                                            settingsExpanded = false
-                                            player?.let { active ->
-                                                TrackSelectionDialogBuilder(
-                                                    this@PlayerActivity, "Audio tracks", active, C.TRACK_TYPE_AUDIO
-                                                ).build().show()
-                                            }
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("Video quality · $selectedQuality") },
-                                        onClick = { settingsExpanded = false; qualityDialog = true }
-                                    )
-                                }
-                            }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Video quality · $selectedQuality") },
+                                onClick = { settingsExpanded = false; qualityDialog = true }
+                            )
                         }
                     }
                     if (qualityDialog) {
@@ -204,16 +215,43 @@ class PlayerActivity : ComponentActivity() {
                             title = { Text("Video quality") },
                             text = {
                                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    listOf("Auto", "2160p", "1080p", "720p", "480p").forEach { quality ->
-                                        TextButton(
-                                            onClick = {
-                                                selectedQuality = quality
-                                                trackSelector?.let { applyQuality(quality, it) }
-                                                qualityDialog = false
-                                            },
-                                            modifier = Modifier.width(220.dp)
-                                        ) {
-                                            Text(if (quality == selectedQuality) "✓  $quality" else quality)
+                                    TextButton(
+                                        onClick = {
+                                            selectedQuality = "Auto"
+                                            trackSelector?.let { applyQuality("Auto", it) }
+                                            qualityDialog = false
+                                        },
+                                        modifier = Modifier.width(260.dp)
+                                    ) {
+                                        Text(if (selectedQuality == "Auto") "✓  Auto" else "Auto")
+                                    }
+                                    if (availableVideoQualities.isEmpty()) {
+                                        Text("Detecting qualities available in this stream…", modifier = Modifier.padding(8.dp))
+                                    } else {
+                                        availableVideoQualities.forEach { quality ->
+                                            val label = if (availableVideoQualities.size == 1) {
+                                                "Original · ${quality.width}×${quality.height}"
+                                            } else quality.label
+                                            TextButton(
+                                                onClick = {
+                                                    selectedQuality = label
+                                                    trackSelector?.let { selector ->
+                                                        selector.parameters = selector.buildUponParameters()
+                                                            .setMaxVideoSize(quality.width, quality.height)
+                                                            .build()
+                                                    }
+                                                    qualityDialog = false
+                                                },
+                                                modifier = Modifier.width(260.dp)
+                                            ) {
+                                                Text(if (selectedQuality == label) "✓  $label" else label)
+                                            }
+                                        }
+                                        if (availableVideoQualities.size == 1) {
+                                            Text(
+                                                "This stream provides only one video quality.",
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                                            )
                                         }
                                     }
                                 }
