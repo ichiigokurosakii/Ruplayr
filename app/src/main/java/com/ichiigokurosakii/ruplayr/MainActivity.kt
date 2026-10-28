@@ -420,7 +420,7 @@ private fun DetailsScreen(
     var seasonMenu by remember { mutableStateOf(false) }
     val seasons = episodes.map { it.season }.distinct().sorted()
     val visibleEpisodes = episodes.filter { it.season == selectedSeason }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).background(Page).statusBarsPadding()) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).background(Page).statusBarsPadding().navigationBarsPadding()) {
         Box(Modifier.fillMaxWidth().height(300.dp)) {
             AsyncImage(model = item.backdropUrl ?: item.posterUrl, contentDescription = item.title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Page))))
