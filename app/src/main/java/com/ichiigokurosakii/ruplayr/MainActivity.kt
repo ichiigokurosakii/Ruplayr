@@ -92,6 +92,8 @@ private fun RuplayrApp(
     val sourceRepository = remember { MovySourceRepository() }
     val scope = rememberCoroutineScope()
     var selectedTab by remember { mutableStateOf("Home") }
+    var expandedHomeRow by remember { mutableStateOf<MediaRow?>(null) }
+    val homeScrollState = rememberScrollState()
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
     var homeRows by remember { mutableStateOf<List<MediaRow>>(emptyList()) }
@@ -114,13 +116,17 @@ private fun RuplayrApp(
         homeLoading = false
     }
 
-    BackHandler(enabled = selected != null || selectedTab != "Home") {
-        if (sourceDialog) sourceDialog = false
-        else if (selected != null) {
-            selected = null
-            activeEpisode = null
-            sources = emptyList()
-        } else selectedTab = "Home"
+    BackHandler(enabled = sourceDialog || expandedHomeRow != null || selected != null || selectedTab != "Home") {
+        when {
+            sourceDialog -> sourceDialog = false
+            selected != null -> {
+                selected = null
+                activeEpisode = null
+                sources = emptyList()
+            }
+            expandedHomeRow != null -> expandedHomeRow = null
+            selectedTab != "Home" -> selectedTab = "Home"
+        }
     }
 
     fun findSources(item: MediaItem) {
@@ -264,6 +270,9 @@ private fun RuplayrApp(
                             }
                             else -> HomeScreen(
                                 rows = homeRows, loading = homeLoading,
+                                scrollState = homeScrollState,
+                                expandedRow = expandedHomeRow,
+                                onExpandedRowChange = { expandedHomeRow = it },
                                 onSearch = { selectedTab = "Search" },
                                 onSelect = ::openItem,
                                 onPlayFeatured = { item -> openItem(item); findSources(item) }
@@ -334,17 +343,18 @@ private fun RuplayrApp(
 private fun HomeScreen(
     rows: List<MediaRow>,
     loading: Boolean,
+    scrollState: androidx.compose.foundation.ScrollState,
+    expandedRow: MediaRow?,
+    onExpandedRowChange: (MediaRow?) -> Unit,
     onSearch: () -> Unit,
     onSelect: (MediaItem) -> Unit,
     onPlayFeatured: (MediaItem) -> Unit
 ) {
     val featured = remember(rows) { rows.flatMap { it.items }.distinctBy { it.mediaType.name + "-" + it.id }.randomOrNull() }
-    var expandedRow by remember { mutableStateOf<MediaRow?>(null) }
-    BackHandler(enabled = expandedRow != null) { expandedRow = null }
     if (expandedRow != null) {
         Column(Modifier.fillMaxSize().background(Page)) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { expandedRow = null }) { Text("← Back", color = Accent) }
+                TextButton(onClick = { onExpandedRowChange(null) }) { Text("← Back", color = Accent) }
                 Text(expandedRow!!.title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp))
             }
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -363,7 +373,7 @@ private fun HomeScreen(
             }
         }
     } else {
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 12.dp)) {
+        Column(Modifier.fillMaxSize().verticalScroll(scrollState).padding(bottom = 12.dp)) {
             Box(Modifier.fillMaxWidth().height(300.dp).padding(horizontal = 12.dp).clip(RoundedCornerShape(20.dp)).background(Panel)) {
                 if (featured?.backdropUrl != null || featured?.posterUrl != null) AsyncImage(model = featured.backdropUrl ?: featured.posterUrl, contentDescription = featured.title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 else Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(0xFF343047), Page))))
@@ -386,7 +396,7 @@ private fun HomeScreen(
                 Column(Modifier.padding(bottom = 18.dp)) {
                     Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 12.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                         Text(row.title, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-                        TextButton(onClick = { expandedRow = row }) { Text("See all  ›", color = Accent, fontSize = 13.sp) }
+                        TextButton(onClick = { onExpandedRowChange(row) }) { Text("See all  ›", color = Accent, fontSize = 13.sp) }
                     }
                     LazyRow(contentPadding = PaddingValues(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         items(row.items, key = { "${it.mediaType}-${it.id}" }) { item ->
