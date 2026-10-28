@@ -182,7 +182,6 @@ class PlayerActivity : ComponentActivity() {
                                 }) { Text("Retry playback") }
                             }
                         }
-                    }
                         DropdownMenu(
                             expanded = settingsExpanded,
                             onDismissRequest = { settingsExpanded = false },
