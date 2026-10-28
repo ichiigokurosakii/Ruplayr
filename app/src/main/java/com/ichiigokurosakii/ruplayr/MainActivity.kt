@@ -312,8 +312,8 @@ private fun RuplayrApp(
                                         Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Accent)
                                         Spacer(Modifier.width(10.dp))
                                         Column(Modifier.weight(1f)) {
-                                            Text(source.label.substringBefore(" · "), color = Color.White, fontWeight = FontWeight.SemiBold)
-                                            Text(source.label.substringAfter(" · ", "Auto"), color = Muted, fontSize = 12.sp)
+                                            Text(source.label.split(" · ").take(2).joinToString(" · "), color = Color.White, fontWeight = FontWeight.SemiBold)
+                                            Text(source.label.split(" · ").drop(2).joinToString(" · ").ifBlank { " " }, color = Muted, fontSize = 12.sp)
                                         }
                                         Text("Play", color = Accent, fontWeight = FontWeight.Bold)
                                     }
@@ -339,60 +339,63 @@ private fun HomeScreen(
     onPlayFeatured: (MediaItem) -> Unit
 ) {
     val featured = remember(rows) { rows.flatMap { it.items }.distinctBy { it.mediaType.name + "-" + it.id }.randomOrNull() }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 12.dp)) {
-        Box(
-            Modifier.fillMaxWidth().height(300.dp).padding(horizontal = 12.dp)
-                .clip(RoundedCornerShape(20.dp)).background(Panel)
-        ) {
-            if (featured?.backdropUrl != null || featured?.posterUrl != null) {
-                AsyncImage(
-                    model = featured.backdropUrl ?: featured.posterUrl,
-                    contentDescription = featured.title,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(0xFF343047), Page))))
+    var expandedRow by remember { mutableStateOf<MediaRow?>(null) }
+    BackHandler(enabled = expandedRow != null) { expandedRow = null }
+    if (expandedRow != null) {
+        Column(Modifier.fillMaxSize().background(Page)) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { expandedRow = null }) { Text("← Back", color = Accent) }
+                Text(expandedRow!!.title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp))
             }
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0x22000000), Color(0xEE090B10)))))
-            Column(Modifier.align(Alignment.BottomStart).padding(start = 20.dp, end = 20.dp, bottom = 22.dp)) {
-                Text("FEATURED", color = Color(0xFFC4B5FD), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-                Text(featured?.title ?: "Discover something great", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Box(Modifier.fillMaxWidth().padding(top = 14.dp).height(48.dp)) {
-                    Button(
-                        onClick = { featured?.let(onPlayFeatured) },
-                        enabled = featured != null,
-                        modifier = Modifier.align(Alignment.Center),
-                        colors = ButtonDefaults.buttonColors(containerColor = Accent),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = null)
-                        Spacer(Modifier.width(5.dp))
-                        Text("Play")
+            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(expandedRow!!.items, key = { "${it.mediaType}-${it.id}" }) { item ->
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Panel).clickable { onSelect(item) }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        AsyncImage(model = item.posterUrl, contentDescription = item.title, modifier = Modifier.width(82.dp).height(118.dp).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(item.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            item.year?.let { Text(it, color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
+                            Text(item.mediaType.name.lowercase().replaceFirstChar { it.uppercase() }, color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+                            Text("View details  ›", color = Accent, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
+                        }
                     }
-                    OutlinedButton(
-                        onClick = { featured?.let(onSelect) },
-                        enabled = featured != null,
-                        modifier = Modifier.align(Alignment.CenterEnd),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
-                    ) { Text("Details") }
                 }
             }
         }
-        Spacer(Modifier.height(18.dp))
-        if (loading) Box(Modifier.fillMaxWidth().padding(28.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Accent) }
-        else if (rows.isEmpty()) Text("Catalogue could not load. Check your connection and try again.", color = Muted, modifier = Modifier.padding(20.dp))
-        else rows.forEach { row ->
-            Column(Modifier.padding(bottom = 18.dp)) {
-                Text(row.title, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
-                LazyRow(contentPadding = PaddingValues(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(row.items, key = { "${it.mediaType}-${it.id}" }) { item ->
-                        Column(Modifier.width(124.dp).clickable { onSelect(item) }) {
-                            AsyncImage(model = item.posterUrl, contentDescription = item.title, modifier = Modifier.fillMaxWidth().height(178.dp).clip(RoundedCornerShape(12.dp)).background(Panel), contentScale = ContentScale.Crop)
-                            Spacer(Modifier.height(7.dp))
-                            Text(item.title, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            item.year?.let { Text(it, color = Muted, fontSize = 11.sp) }
+    } else {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 12.dp)) {
+            Box(Modifier.fillMaxWidth().height(300.dp).padding(horizontal = 12.dp).clip(RoundedCornerShape(20.dp)).background(Panel)) {
+                if (featured?.backdropUrl != null || featured?.posterUrl != null) AsyncImage(model = featured.backdropUrl ?: featured.posterUrl, contentDescription = featured.title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                else Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(0xFF343047), Page))))
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0x22000000), Color(0xEE090B10)))))
+                Column(Modifier.align(Alignment.BottomStart).padding(start = 20.dp, end = 20.dp, bottom = 22.dp)) {
+                    Text("FEATURED", color = Color(0xFFC4B5FD), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                    Text(featured?.title ?: "Discover something great", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Box(Modifier.fillMaxWidth().padding(top = 14.dp).height(48.dp)) {
+                        Button(onClick = { featured?.let(onPlayFeatured) }, enabled = featured != null, modifier = Modifier.align(Alignment.Center), colors = ButtonDefaults.buttonColors(containerColor = Accent), shape = RoundedCornerShape(10.dp)) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null); Spacer(Modifier.width(5.dp)); Text("Play")
+                        }
+                        OutlinedButton(onClick = { featured?.let(onSelect) }, enabled = featured != null, modifier = Modifier.align(Alignment.CenterEnd), shape = RoundedCornerShape(10.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)) { Text("Details") }
+                    }
+                }
+            }
+            Spacer(Modifier.height(18.dp))
+            if (loading) Box(Modifier.fillMaxWidth().padding(28.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Accent) }
+            else if (rows.isEmpty()) Text("Catalogue could not load. Check your connection and try again.", color = Muted, modifier = Modifier.padding(20.dp))
+            else rows.forEach { row ->
+                Column(Modifier.padding(bottom = 18.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 12.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(row.title, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                        TextButton(onClick = { expandedRow = row }) { Text("See all  ›", color = Accent, fontSize = 13.sp) }
+                    }
+                    LazyRow(contentPadding = PaddingValues(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        items(row.items, key = { "${it.mediaType}-${it.id}" }) { item ->
+                            Column(Modifier.width(124.dp).clickable { onSelect(item) }) {
+                                AsyncImage(model = item.posterUrl, contentDescription = item.title, modifier = Modifier.fillMaxWidth().height(178.dp).clip(RoundedCornerShape(12.dp)).background(Panel), contentScale = ContentScale.Crop)
+                                Spacer(Modifier.height(7.dp))
+                                Text(item.title, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                item.year?.let { Text(it, color = Muted, fontSize = 11.sp) }
+                            }
                         }
                     }
                 }
