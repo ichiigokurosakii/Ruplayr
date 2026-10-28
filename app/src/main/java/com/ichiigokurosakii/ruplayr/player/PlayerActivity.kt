@@ -220,5 +220,6 @@ class PlayerActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_STREAM_URL = "stream_url"
+        const val EXTRA_DEFAULT_QUALITY = "default_quality"
     }
 }
