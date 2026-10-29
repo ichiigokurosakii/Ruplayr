@@ -493,14 +493,25 @@ private fun HomeScreen(
             }
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 items(expandedRow!!.items, key = { "${it.mediaType}-${it.id}" }) { item ->
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Panel).clickable { onSelect(item) }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        AsyncImage(model = item.posterUrl, contentDescription = item.title, modifier = Modifier.width(82.dp).height(118.dp).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop)
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(item.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            item.year?.let { Text(it, color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
-                            Text(item.mediaType.name.lowercase().replaceFirstChar { it.uppercase() }, color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
-                            Text("View details  ›", color = Accent, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
+                    val continueEntry = continueEntries.firstOrNull { it.item.id == item.id }
+                    if (expandedRow!!.title == "Continue Watching" && continueEntry != null) {
+                        ContinueWatchingListItem(
+                            entry = continueEntry,
+                            progress = progressForKey(continueEntry.progressKey),
+                            onOpen = { onSelect(item) },
+                            onPlay = { onPlayContinue(continueEntry) },
+                            onRemove = { onRemoveContinue(item.id) }
+                        )
+                    } else {
+                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Panel).clickable { onSelect(item) }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            AsyncImage(model = item.posterUrl, contentDescription = item.title, modifier = Modifier.width(82.dp).height(118.dp).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop)
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(item.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                item.year?.let { Text(it, color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
+                                Text(item.mediaType.name.lowercase().replaceFirstChar { it.uppercase() }, color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+                                Text("View details  ›", color = Accent, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
+                            }
                         }
                     }
                 }
@@ -526,7 +537,7 @@ private fun HomeScreen(
             Spacer(Modifier.height(18.dp))
             if (loading) Box(Modifier.fillMaxWidth().padding(28.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Accent) }
             else if (rows.isEmpty()) Text("Catalogue could not load. Check your connection and try again.", color = Muted, modifier = Modifier.padding(20.dp))
-            else rows.forEach { row ->
+            else (listOfNotNull(MediaRow("Continue Watching", continueEntries.map { it.item }).takeIf { continueEntries.isNotEmpty() }) + rows).forEach { row ->
                 Column(Modifier.padding(bottom = 18.dp)) {
                     Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 12.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                         Text(row.title, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
@@ -534,11 +545,22 @@ private fun HomeScreen(
                     }
                     LazyRow(contentPadding = PaddingValues(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         items(row.items, key = { "${it.mediaType}-${it.id}" }) { item ->
-                            Column(Modifier.width(124.dp).clickable { onSelect(item) }) {
-                                AsyncImage(model = item.posterUrl, contentDescription = item.title, modifier = Modifier.fillMaxWidth().height(178.dp).clip(RoundedCornerShape(12.dp)).background(Panel), contentScale = ContentScale.Crop)
-                                Spacer(Modifier.height(7.dp))
-                                Text(item.title, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                item.year?.let { Text(it, color = Muted, fontSize = 11.sp) }
+                            val continueEntry = if (row.title == "Continue Watching") continueEntries.firstOrNull { it.item.id == item.id } else null
+                            if (continueEntry != null) {
+                                ContinueWatchingPoster(
+                                    entry = continueEntry,
+                                    progress = progressForKey(continueEntry.progressKey),
+                                    onOpen = { onSelect(item) },
+                                    onPlay = { onPlayContinue(continueEntry) },
+                                    onRemove = { onRemoveContinue(item.id) }
+                                )
+                            } else {
+                                Column(Modifier.width(124.dp).clickable { onSelect(item) }) {
+                                    AsyncImage(model = item.posterUrl, contentDescription = item.title, modifier = Modifier.fillMaxWidth().height(178.dp).clip(RoundedCornerShape(12.dp)).background(Panel), contentScale = ContentScale.Crop)
+                                    Spacer(Modifier.height(7.dp))
+                                    Text(item.title, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    item.year?.let { Text(it, color = Muted, fontSize = 11.sp) }
+                                }
                             }
                         }
                     }
