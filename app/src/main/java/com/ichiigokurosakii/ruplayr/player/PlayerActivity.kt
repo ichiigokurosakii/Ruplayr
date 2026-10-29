@@ -2,6 +2,8 @@ package com.ichiigokurosakii.ruplayr.player
 
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -55,6 +57,25 @@ class PlayerActivity : ComponentActivity() {
     private var player: ExoPlayer? = null
     private var playbackError by mutableStateOf<String?>(null)
     private var resumeAfterPause = false
+    private val progressHandler = Handler(Looper.getMainLooper())
+    private var progressKey: String = ""
+    private val progressRunnable = object : Runnable {
+        override fun run() {
+            savePlaybackProgress()
+            if (!isFinishing && !isDestroyed) progressHandler.postDelayed(this, 5_000L)
+        }
+    }
+
+    private fun savePlaybackProgress() {
+        val active = player ?: return
+        if (progressKey.isBlank()) return
+        val position = active.currentPosition.coerceAtLeast(0L)
+        val duration = active.duration.takeIf { it > 0L } ?: 0L
+        getSharedPreferences("playback", MODE_PRIVATE).edit()
+            .putLong("position_\$progressKey", position)
+            .putLong("duration_\$progressKey", duration)
+            .apply()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -65,6 +86,8 @@ class PlayerActivity : ComponentActivity() {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
         val streamUrl = intent.getStringExtra(EXTRA_STREAM_URL).orEmpty()
+        progressKey = intent.getStringExtra(EXTRA_PROGRESS_KEY).orEmpty()
+        val startPosition = intent.getLongExtra(EXTRA_START_POSITION, 0L).coerceAtLeast(0L)
         if (streamUrl.isBlank()) {
             setContent {
                 Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
@@ -117,10 +140,11 @@ class PlayerActivity : ComponentActivity() {
                     }
                     override fun onIsPlayingChanged(isPlaying: Boolean) { if (isPlaying) playbackError = null }
                 })
-                setMediaItem(ExoMediaItem.fromUri(Uri.parse(streamUrl)))
+                setMediaItem(ExoMediaItem.fromUri(Uri.parse(streamUrl)), startPosition)
                 prepare()
                 playWhenReady = true
             }
+        progressHandler.post(progressRunnable)
 
         setContent {
             MaterialTheme {
@@ -218,6 +242,7 @@ class PlayerActivity : ComponentActivity() {
     }
 
     override fun onPause() {
+        savePlaybackProgress()
         resumeAfterPause = player?.playWhenReady == true
         player?.pause()
         super.onPause()
@@ -232,6 +257,8 @@ class PlayerActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        savePlaybackProgress()
+        progressHandler.removeCallbacks(progressRunnable)
         player?.release()
         player = null
         playbackError = null
@@ -242,5 +269,7 @@ class PlayerActivity : ComponentActivity() {
     companion object {
         const val EXTRA_STREAM_URL = "stream_url"
         const val EXTRA_DEFAULT_QUALITY = "default_quality"
+        const val EXTRA_PROGRESS_KEY = "progress_key"
+        const val EXTRA_START_POSITION = "start_position"
     }
 }
