@@ -506,7 +506,7 @@ private fun HomeScreen(
                             onPlay = { onPlayContinue(continueEntry) },
                             onRemove = { onRemoveContinue(item.id) }
                         )
-                    } else {
+                    } else if (expandedRow!!.title != "Continue Watching") {
                         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Panel).clickable { onSelect(item) }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                             AsyncImage(model = item.posterUrl, contentDescription = item.title, modifier = Modifier.width(82.dp).height(118.dp).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop)
                             Spacer(Modifier.width(12.dp))
