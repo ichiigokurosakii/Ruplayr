@@ -121,6 +121,13 @@ private fun progressFraction(position: Long, duration: Long): Float =
     if (duration > 0L) (position.toFloat() / duration.toFloat()).coerceIn(0f, 1f) else 0f
 
 class MainActivity : ComponentActivity() {
+    private var continueRefresh by mutableIntStateOf(0)
+
+    override fun onResume() {
+        super.onResume()
+        continueRefresh++
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, true)
@@ -129,16 +136,33 @@ class MainActivity : ComponentActivity() {
         setContent {
             RuplayrApp(
                 lastPlayed = { id -> getSharedPreferences("playback", MODE_PRIVATE).getString("last_$id", null) },
+                continueRefresh = continueRefresh,
+                progressForKey = { key ->
+                    val prefs = getSharedPreferences("playback", MODE_PRIVATE)
+                    prefs.getLong("position_$key", 0L) to prefs.getLong("duration_$key", 0L)
+                },
+                removeFromContinue = { id ->
+                    val prefs = getSharedPreferences("playback", MODE_PRIVATE)
+                    val ids = prefs.getStringSet("continue_ids", emptySet()).orEmpty().toMutableSet()
+                    ids.remove(id)
+                    prefs.edit().putStringSet("continue_ids", ids).apply()
+                    continueRefresh++
+                },
                 defaultQuality = getSharedPreferences("playback", MODE_PRIVATE).getString("default_quality", "Auto") ?: "Auto",
                 saveDefaultQuality = { quality -> getSharedPreferences("playback", MODE_PRIVATE).edit().putString("default_quality", quality).apply() },
                 saveLastPlayed = { id, episode ->
                     getSharedPreferences("playback", MODE_PRIVATE).edit()
                         .putString("last_$id", "${episode.season}:${episode.episode}").apply()
                 },
-                onPlay = { source ->
+                onPlay = { source, item, episode ->
+                    val prefs = getSharedPreferences("playback", MODE_PRIVATE)
+                    persistContinueEntry(prefs, item, episode)
+                    val progressKey = if (episode == null) item.id else "${item.id}:${episode.season}:${episode.episode}"
                     startActivity(Intent(this, PlayerActivity::class.java)
                         .putExtra(PlayerActivity.EXTRA_STREAM_URL, source.url)
-                        .putExtra(PlayerActivity.EXTRA_DEFAULT_QUALITY, getSharedPreferences("playback", MODE_PRIVATE).getString("default_quality", "Auto") ?: "Auto"))
+                        .putExtra(PlayerActivity.EXTRA_DEFAULT_QUALITY, prefs.getString("default_quality", "Auto") ?: "Auto")
+                        .putExtra(PlayerActivity.EXTRA_PROGRESS_KEY, progressKey)
+                        .putExtra(PlayerActivity.EXTRA_START_POSITION, prefs.getLong("position_$progressKey", 0L)))
                 }
             )
         }
@@ -148,10 +172,13 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun RuplayrApp(
     lastPlayed: (String) -> String?,
+    continueRefresh: Int,
+    progressForKey: (String) -> Pair<Long, Long>,
+    removeFromContinue: (String) -> Unit,
     defaultQuality: String,
     saveDefaultQuality: (String) -> Unit,
     saveLastPlayed: (String, EpisodeItem) -> Unit,
-    onPlay: (MovySource) -> Unit
+    onPlay: (MovySource, MediaItem, EpisodeItem?) -> Unit
 ) {
     val repository = remember { MovyRepository() }
     val sourceRepository = remember { MovySourceRepository() }
@@ -175,6 +202,10 @@ private fun RuplayrApp(
     var activeEpisode by remember { mutableStateOf<EpisodeItem?>(null) }
     val searchFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
+    val appContext = androidx.compose.ui.platform.LocalContext.current
+    val continueEntries = remember(continueRefresh) {
+        readContinueEntries(appContext.getSharedPreferences("playback", android.content.Context.MODE_PRIVATE))
+    }
 
     LaunchedEffect(Unit) {
         homeRows = repository.homeRows()
