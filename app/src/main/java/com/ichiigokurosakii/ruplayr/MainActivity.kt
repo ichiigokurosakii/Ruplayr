@@ -251,6 +251,7 @@ private fun RuplayrApp(
                     ?: loaded.firstOrNull()
                 if (target != null) {
                     activeEpisode = target
+                    saveLastPlayed(entry.item.id, target)
                     val kind = if (entry.item.mediaType == MediaType.ANIME) "anime" else "tv"
                     val episodeItem = entry.item.copy(
                         title = target.name,
