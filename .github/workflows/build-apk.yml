@@ -6,9 +6,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Give each commit its own group so a stale/stuck run cannot block the latest APK.
 concurrency:
-  group: ruplayr-apk-${{ github.ref }}
-  cancel-in-progress: true
+  group: ruplayr-apk-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
