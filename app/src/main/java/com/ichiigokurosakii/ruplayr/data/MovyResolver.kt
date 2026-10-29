@@ -182,7 +182,7 @@ internal object MovyResolver {
 
     private suspend fun fetchSeed(tmdbId: Int): String? {
         return try {
-            val body = httpGet("$API/seed?mediaId=$tmdbId")
+            val body = httpGet("$API/seed?mediaId=$tmdbId", seedHttp)
             JSONObject(body).optString("seed").takeIf { it.isNotBlank() && it != "null" }
         } catch (_: Exception) {
             null
