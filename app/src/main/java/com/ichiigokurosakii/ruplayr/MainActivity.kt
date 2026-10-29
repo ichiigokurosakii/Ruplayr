@@ -326,6 +326,8 @@ private fun RuplayrApp(
                     item = selected!!,
                     loading = detailsLoading,
                     sourceLoading = sourceLoading,
+                    progressForKey = progressForKey,
+                    lastPlayedEpisode = lastPlayed(selected!!.id),
                     episodes = episodes,
                     episodesLoading = episodesLoading,
                     selectedSeason = selectedSeason,
@@ -692,6 +694,8 @@ private fun DetailsScreen(
     item: MediaItem,
     loading: Boolean,
     sourceLoading: Boolean,
+    progressForKey: (String) -> Pair<Long, Long>,
+    lastPlayedEpisode: String?,
     episodes: List<EpisodeItem>,
     episodesLoading: Boolean,
     selectedSeason: Int,
@@ -722,9 +726,26 @@ private fun DetailsScreen(
                 colors = ButtonDefaults.buttonColors(containerColor = Accent),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Icon(Icons.Default.PlayArrow, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(if (sourceLoading) "Loading servers…" else "Play", fontWeight = FontWeight.Bold)
+                val savedPair = lastPlayedEpisode?.split(":")
+                val playProgressKey = if (item.mediaType == MediaType.MOVIE) item.id
+                    else if (savedPair != null && savedPair.size >= 2) "${item.id}:${savedPair[0]}:${savedPair[1]}" else ""
+                val playProgress = progressForKey(playProgressKey)
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(if (sourceLoading) "Loading servers…" else "Play", fontWeight = FontWeight.Bold)
+                    }
+                    if (playProgress.second > 0L && playProgress.first > 0L) {
+                        Spacer(Modifier.height(5.dp))
+                        LinearProgressIndicator(
+                            progress = progressFraction(playProgress.first, playProgress.second),
+                            modifier = Modifier.fillMaxWidth(0.82f).height(3.dp),
+                            color = Color.White,
+                            trackColor = Color(0x66777777)
+                        )
+                    }
+                }
             }
             if (loading) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 10.dp), color = Accent)
             if (item.mediaType != MediaType.MOVIE) {
@@ -753,12 +774,23 @@ private fun DetailsScreen(
                                 .background(Panel).clickable { onPlayEpisode(episode) }.padding(10.dp),
                             verticalAlignment = Alignment.Top
                         ) {
-                            AsyncImage(
-                                model = item.posterUrl ?: item.backdropUrl,
-                                contentDescription = episode.name,
-                                modifier = Modifier.width(116.dp).height(76.dp).clip(RoundedCornerShape(8.dp)),
-                                contentScale = ContentScale.Crop
-                            )
+                            Box(Modifier.width(116.dp).height(76.dp).clip(RoundedCornerShape(8.dp))) {
+                                AsyncImage(
+                                    model = item.posterUrl ?: item.backdropUrl,
+                                    contentDescription = episode.name,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                                val epProgress = progressForKey("${item.id}:${episode.season}:${episode.episode}")
+                                if (epProgress.second > 0L && epProgress.first > 0L) {
+                                    LinearProgressIndicator(
+                                        progress = progressFraction(epProgress.first, epProgress.second),
+                                        modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(4.dp),
+                                        color = Accent,
+                                        trackColor = Color(0x99000000)
+                                    )
+                                }
+                            }
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(episode.name, color = Color.White, fontWeight = FontWeight.SemiBold)
