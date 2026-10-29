@@ -588,8 +588,16 @@ private fun ContinueWatchingPoster(
             Box(Modifier.align(Alignment.Center).size(62.dp).clip(RoundedCornerShape(50)).background(Color(0xBB090B10)).border(1.dp, Color(0xDDFFFFFF), RoundedCornerShape(50)).clickable { onPlay() }, contentAlignment = Alignment.Center) {
                 Icon(Icons.Default.PlayArrow, contentDescription = "Continue playing", tint = Color.White, modifier = Modifier.size(40.dp))
             }
-            IconButton(onClick = onRemove, modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(16.dp).clip(RoundedCornerShape(50)).background(Color(0xCC090B10)).border(0.7.dp, Color(0xCCFFFFFF), RoundedCornerShape(50))) {
-                Icon(Icons.Default.Close, contentDescription = "Remove from Continue Watching", tint = Color.White, modifier = Modifier.size(12.dp))
+            Box(
+                Modifier.align(Alignment.TopEnd).padding(2.dp).size(20.dp).clickable { onRemove() },
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    Modifier.size(12.dp).clip(RoundedCornerShape(50)).background(Color(0xCC090B10)).border(0.7.dp, Color(0xCCFFFFFF), RoundedCornerShape(50)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = "Remove from Continue Watching", tint = Color.White, modifier = Modifier.size(9.dp))
+                }
             }
             if (progress.second > 0L && progress.first > 0L) {
                 LinearProgressIndicator(
@@ -623,8 +631,16 @@ private fun ContinueWatchingListItem(
             IconButton(onClick = onPlay, modifier = Modifier.align(Alignment.Center).size(50.dp).clip(RoundedCornerShape(50)).background(Color(0xCC090B10)).border(1.dp, Color(0xDDFFFFFF), RoundedCornerShape(50))) {
                 Icon(Icons.Default.PlayArrow, contentDescription = "Continue playing", tint = Color.White, modifier = Modifier.size(30.dp))
             }
-            IconButton(onClick = onRemove, modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(16.dp).clip(RoundedCornerShape(50)).background(Color(0xCC090B10)).border(0.7.dp, Color(0xCCFFFFFF), RoundedCornerShape(50))) {
-                Icon(Icons.Default.Close, contentDescription = "Remove from Continue Watching", tint = Color.White, modifier = Modifier.size(12.dp))
+            Box(
+                Modifier.align(Alignment.TopEnd).padding(2.dp).size(20.dp).clickable { onRemove() },
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    Modifier.size(12.dp).clip(RoundedCornerShape(50)).background(Color(0xCC090B10)).border(0.7.dp, Color(0xCCFFFFFF), RoundedCornerShape(50)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = "Remove from Continue Watching", tint = Color.White, modifier = Modifier.size(9.dp))
+                }
             }
             if (progress.second > 0L && progress.first > 0L) {
                 LinearProgressIndicator(
