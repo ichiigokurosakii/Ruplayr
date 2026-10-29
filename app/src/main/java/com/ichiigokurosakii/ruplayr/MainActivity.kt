@@ -2,6 +2,8 @@ package com.ichiigokurosakii.ruplayr
 
 import android.content.Intent
 import android.os.Bundle
+import android.content.SharedPreferences
+import org.json.JSONObject
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -23,6 +25,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -54,6 +57,68 @@ private val Page = Color(0xFF090B10)
 private val Panel = Color(0xFF151923)
 private val Accent = Color(0xFF8B5CF6)
 private val Muted = Color(0xFF9CA3AF)
+
+private data class ContinueEntry(
+    val item: MediaItem,
+    val progressKey: String,
+    val season: Int? = null,
+    val episode: Int? = null,
+    val episodeName: String? = null,
+    val updatedAt: Long = 0L
+)
+
+private fun readContinueEntries(prefs: SharedPreferences): List<ContinueEntry> {
+    val ids = prefs.getStringSet("continue_ids", emptySet()).orEmpty()
+    return ids.mapNotNull { id ->
+        runCatching {
+            val raw = prefs.getString("continue_entry_$id", null) ?: return@runCatching null
+            val json = JSONObject(raw)
+            val type = runCatching { MediaType.valueOf(json.optString("type", "MOVIE")) }.getOrDefault(MediaType.MOVIE)
+            ContinueEntry(
+                item = MediaItem(
+                    id = id,
+                    title = json.optString("title", "Unknown title"),
+                    posterUrl = json.optString("poster").takeIf { it.isNotBlank() && it != "null" },
+                    backdropUrl = json.optString("backdrop").takeIf { it.isNotBlank() && it != "null" },
+                    overview = json.optString("overview"),
+                    year = json.optString("year").takeIf { it.isNotBlank() && it != "null" },
+                    mediaType = type,
+                    detailUrl = json.optString("detailUrl").takeIf { it.isNotBlank() && it != "null" }
+                ),
+                progressKey = json.optString("progressKey", id),
+                season = json.optInt("season").takeIf { json.has("season") && it > 0 },
+                episode = json.optInt("episode").takeIf { json.has("episode") && it > 0 },
+                episodeName = json.optString("episodeName").takeIf { it.isNotBlank() && it != "null" },
+                updatedAt = json.optLong("updatedAt")
+            )
+        }.getOrNull()
+    }.sortedByDescending { it.updatedAt }
+}
+
+private fun persistContinueEntry(prefs: SharedPreferences, item: MediaItem, episode: EpisodeItem?) {
+    val progressKey = if (episode == null) item.id else "${item.id}:${episode.season}:${episode.episode}"
+    val json = JSONObject()
+        .put("title", item.title)
+        .put("poster", item.posterUrl)
+        .put("backdrop", item.backdropUrl)
+        .put("overview", item.overview)
+        .put("year", item.year)
+        .put("type", item.mediaType.name)
+        .put("detailUrl", item.detailUrl)
+        .put("progressKey", progressKey)
+        .put("updatedAt", System.currentTimeMillis())
+    if (episode != null) {
+        json.put("season", episode.season)
+        json.put("episode", episode.episode)
+        json.put("episodeName", episode.name)
+    }
+    val ids = prefs.getStringSet("continue_ids", emptySet()).orEmpty().toMutableSet()
+    ids.add(item.id)
+    prefs.edit().putString("continue_entry_${item.id}", json.toString()).putStringSet("continue_ids", ids).apply()
+}
+
+private fun progressFraction(position: Long, duration: Long): Float =
+    if (duration > 0L) (position.toFloat() / duration.toFloat()).coerceIn(0f, 1f) else 0f
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
