@@ -20,9 +20,9 @@ import java.util.concurrent.TimeUnit
  */
 internal object MovyResolver {
     private val http = OkHttpClient.Builder()
-        .connectTimeout(12, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .callTimeout(18, TimeUnit.SECONDS)
+        .connectTimeout(5, TimeUnit.SECONDS)
+        .readTimeout(8, TimeUnit.SECONDS)
+        .callTimeout(10, TimeUnit.SECONDS)
         .build()
 
     private suspend fun httpGet(url: String): String = withContext(Dispatchers.IO) {
