@@ -8,6 +8,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -584,10 +585,10 @@ private fun ContinueWatchingPoster(
     Column(Modifier.width(124.dp)) {
         Box(Modifier.fillMaxWidth().height(178.dp).clip(RoundedCornerShape(12.dp)).background(Panel).clickable { onOpen() }) {
             AsyncImage(model = entry.item.posterUrl, contentDescription = entry.item.title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            Box(Modifier.align(Alignment.Center).size(46.dp).clip(RoundedCornerShape(50)).background(Color(0xBB090B10)).clickable { onPlay() }, contentAlignment = Alignment.Center) {
+            Box(Modifier.align(Alignment.Center).size(46.dp).clip(RoundedCornerShape(50)).background(Color(0xBB090B10)).border(1.dp, Color(0xDDFFFFFF), RoundedCornerShape(50)).clickable { onPlay() }, contentAlignment = Alignment.Center) {
                 Icon(Icons.Default.PlayArrow, contentDescription = "Continue playing", tint = Color.White, modifier = Modifier.size(30.dp))
             }
-            IconButton(onClick = onRemove, modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(30.dp).clip(RoundedCornerShape(50)).background(Color(0xCC090B10))) {
+            IconButton(onClick = onRemove, modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(30.dp).clip(RoundedCornerShape(50)).background(Color(0xCC090B10)).border(1.dp, Color(0xCCFFFFFF), RoundedCornerShape(50))) {
                 Icon(Icons.Default.Close, contentDescription = "Remove from Continue Watching", tint = Color.White, modifier = Modifier.size(17.dp))
             }
             if (progress.second > 0L && progress.first > 0L) {
@@ -619,10 +620,10 @@ private fun ContinueWatchingListItem(
     ) {
         Box(Modifier.width(82.dp).height(118.dp).clip(RoundedCornerShape(8.dp))) {
             AsyncImage(model = entry.item.posterUrl, contentDescription = entry.item.title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            IconButton(onClick = onPlay, modifier = Modifier.align(Alignment.Center).size(42.dp).clip(RoundedCornerShape(50)).background(Color(0xCC090B10))) {
+            IconButton(onClick = onPlay, modifier = Modifier.align(Alignment.Center).size(42.dp).clip(RoundedCornerShape(50)).background(Color(0xCC090B10)).border(1.dp, Color(0xDDFFFFFF), RoundedCornerShape(50))) {
                 Icon(Icons.Default.PlayArrow, contentDescription = "Continue playing", tint = Color.White)
             }
-            IconButton(onClick = onRemove, modifier = Modifier.align(Alignment.TopEnd).size(28.dp).clip(RoundedCornerShape(50)).background(Color(0xCC090B10))) {
+            IconButton(onClick = onRemove, modifier = Modifier.align(Alignment.TopEnd).size(28.dp).clip(RoundedCornerShape(50)).background(Color(0xCC090B10)).border(1.dp, Color(0xCCFFFFFF), RoundedCornerShape(50))) {
                 Icon(Icons.Default.Close, contentDescription = "Remove from Continue Watching", tint = Color.White, modifier = Modifier.size(16.dp))
             }
             if (progress.second > 0L && progress.first > 0L) {
