@@ -16,9 +16,9 @@ class MovySourceRepository {
     private val sourceCache = ConcurrentHashMap<String, List<MovySource>>()
     private val episodeCache = ConcurrentHashMap<String, List<EpisodeItem>>()
     private val client = OkHttpClient.Builder()
-        .connectTimeout(12, TimeUnit.SECONDS)
-        .readTimeout(18, TimeUnit.SECONDS)
-        .callTimeout(25, TimeUnit.SECONDS)
+        .connectTimeout(5, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.SECONDS)
+        .callTimeout(12, TimeUnit.SECONDS)
         .build()
 
     suspend fun findSources(item: MediaItem): List<MovySource> = withContext(Dispatchers.IO) {
