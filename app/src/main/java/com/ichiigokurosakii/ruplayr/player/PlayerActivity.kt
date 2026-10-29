@@ -70,10 +70,10 @@ class PlayerActivity : ComponentActivity() {
         val active = player ?: return
         if (progressKey.isBlank()) return
         val position = active.currentPosition.coerceAtLeast(0L)
-        val duration = active.duration.takeIf { it > 0L } ?: 0L
+        val duration = active.duration.takeIf { it > 0L } ?: return
         getSharedPreferences("playback", MODE_PRIVATE).edit()
-            .putLong("position_\$progressKey", position)
-            .putLong("duration_\$progressKey", duration)
+            .putLong("position_$progressKey", position)
+            .putLong("duration_$progressKey", duration)
             .apply()
     }
 
