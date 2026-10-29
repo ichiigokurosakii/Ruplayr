@@ -589,14 +589,14 @@ private fun ContinueWatchingPoster(
                 Icon(Icons.Default.PlayArrow, contentDescription = "Continue playing", tint = Color.White, modifier = Modifier.size(40.dp))
             }
             Box(
-                Modifier.align(Alignment.TopEnd).padding(2.dp).size(20.dp).clickable { onRemove() },
+                Modifier.align(Alignment.TopEnd).padding(2.dp).size(16.dp).clickable { onRemove() },
                 contentAlignment = Alignment.Center
             ) {
                 Box(
-                    Modifier.size(12.dp).clip(RoundedCornerShape(50)).background(Color(0xCC090B10)).border(0.7.dp, Color(0xCCFFFFFF), RoundedCornerShape(50)),
+                    Modifier.size(11.dp).clip(RoundedCornerShape(50)).background(Color(0xCC090B10)).border(0.7.dp, Color(0xCCFFFFFF), RoundedCornerShape(50)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.Close, contentDescription = "Remove from Continue Watching", tint = Color.White, modifier = Modifier.size(9.dp))
+                    Icon(Icons.Default.Close, contentDescription = "Remove from Continue Watching", tint = Color.White, modifier = Modifier.size(8.dp))
                 }
             }
             if (progress.second > 0L && progress.first > 0L) {
@@ -632,14 +632,14 @@ private fun ContinueWatchingListItem(
                 Icon(Icons.Default.PlayArrow, contentDescription = "Continue playing", tint = Color.White, modifier = Modifier.size(30.dp))
             }
             Box(
-                Modifier.align(Alignment.TopEnd).padding(2.dp).size(20.dp).clickable { onRemove() },
+                Modifier.align(Alignment.TopEnd).padding(2.dp).size(16.dp).clickable { onRemove() },
                 contentAlignment = Alignment.Center
             ) {
                 Box(
-                    Modifier.size(12.dp).clip(RoundedCornerShape(50)).background(Color(0xCC090B10)).border(0.7.dp, Color(0xCCFFFFFF), RoundedCornerShape(50)),
+                    Modifier.size(11.dp).clip(RoundedCornerShape(50)).background(Color(0xCC090B10)).border(0.7.dp, Color(0xCCFFFFFF), RoundedCornerShape(50)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.Close, contentDescription = "Remove from Continue Watching", tint = Color.White, modifier = Modifier.size(9.dp))
+                    Icon(Icons.Default.Close, contentDescription = "Remove from Continue Watching", tint = Color.White, modifier = Modifier.size(8.dp))
                 }
             }
             if (progress.second > 0L && progress.first > 0L) {
