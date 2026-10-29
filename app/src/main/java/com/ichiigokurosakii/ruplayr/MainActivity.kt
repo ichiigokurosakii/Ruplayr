@@ -549,6 +549,77 @@ private fun HomeScreen(
 }
 
 @Composable
+private fun ContinueWatchingPoster(
+    entry: ContinueEntry,
+    progress: Pair<Long, Long>,
+    onOpen: () -> Unit,
+    onPlay: () -> Unit,
+    onRemove: () -> Unit
+) {
+    Column(Modifier.width(124.dp)) {
+        Box(Modifier.fillMaxWidth().height(178.dp).clip(RoundedCornerShape(12.dp)).background(Panel).clickable { onOpen() }) {
+            AsyncImage(model = entry.item.posterUrl, contentDescription = entry.item.title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            Box(Modifier.align(Alignment.Center).size(46.dp).clip(RoundedCornerShape(50)).background(Color(0xBB090B10)).clickable { onPlay() }, contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.PlayArrow, contentDescription = "Continue playing", tint = Color.White, modifier = Modifier.size(30.dp))
+            }
+            IconButton(onClick = onRemove, modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(30.dp).clip(RoundedCornerShape(50)).background(Color(0xCC090B10))) {
+                Icon(Icons.Default.Close, contentDescription = "Remove from Continue Watching", tint = Color.White, modifier = Modifier.size(17.dp))
+            }
+            if (progress.second > 0L && progress.first > 0L) {
+                LinearProgressIndicator(
+                    progress = progressFraction(progress.first, progress.second),
+                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(4.dp),
+                    color = Accent,
+                    trackColor = Color(0x99000000)
+                )
+            }
+        }
+        Spacer(Modifier.height(7.dp))
+        Text(entry.item.title, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        entry.episodeName?.let { Text(it, color = Muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+    }
+}
+
+@Composable
+private fun ContinueWatchingListItem(
+    entry: ContinueEntry,
+    progress: Pair<Long, Long>,
+    onOpen: () -> Unit,
+    onPlay: () -> Unit,
+    onRemove: () -> Unit
+) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Panel).clickable { onOpen() }.padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.width(82.dp).height(118.dp).clip(RoundedCornerShape(8.dp))) {
+            AsyncImage(model = entry.item.posterUrl, contentDescription = entry.item.title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            IconButton(onClick = onPlay, modifier = Modifier.align(Alignment.Center).size(42.dp).clip(RoundedCornerShape(50)).background(Color(0xCC090B10))) {
+                Icon(Icons.Default.PlayArrow, contentDescription = "Continue playing", tint = Color.White)
+            }
+            IconButton(onClick = onRemove, modifier = Modifier.align(Alignment.TopEnd).size(28.dp).clip(RoundedCornerShape(50)).background(Color(0xCC090B10))) {
+                Icon(Icons.Default.Close, contentDescription = "Remove from Continue Watching", tint = Color.White, modifier = Modifier.size(16.dp))
+            }
+            if (progress.second > 0L && progress.first > 0L) {
+                LinearProgressIndicator(
+                    progress = progressFraction(progress.first, progress.second),
+                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(4.dp),
+                    color = Accent,
+                    trackColor = Color(0x99000000)
+                )
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(entry.item.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            entry.episodeName?.let { Text(it, color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
+            Text(entry.item.mediaType.name.lowercase().replaceFirstChar { it.uppercase() }, color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+            Text("Continue watching  ›", color = Accent, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+        }
+    }
+}
+
+@Composable
 private fun SearchScreen(
     query: String,
     onQueryChange: (String) -> Unit,
