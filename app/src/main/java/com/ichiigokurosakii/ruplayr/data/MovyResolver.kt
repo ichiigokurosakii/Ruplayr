@@ -20,15 +20,35 @@ import java.util.concurrent.TimeUnit
  */
 internal object MovyResolver {
     private val http = OkHttpClient.Builder()
-        .connectTimeout(5, TimeUnit.SECONDS)
-        .readTimeout(8, TimeUnit.SECONDS)
-        .callTimeout(10, TimeUnit.SECONDS)
+        .connectTimeout(3, TimeUnit.SECONDS)
+        .readTimeout(4, TimeUnit.SECONDS)
+        .callTimeout(4, TimeUnit.SECONDS)
         .build()
 
-    private suspend fun httpGet(url: String): String = withContext(Dispatchers.IO) {
+    // Optional metadata must not delay source discovery for several seconds.
+    private val metadataHttp = http.newBuilder()
+        .connectTimeout(1, TimeUnit.SECONDS)
+        .readTimeout(1, TimeUnit.SECONDS)
+        .callTimeout(1200, TimeUnit.MILLISECONDS)
+        .build()
+
+    private val seedHttp = http.newBuilder()
+        .connectTimeout(1500, TimeUnit.MILLISECONDS)
+        .readTimeout(2, TimeUnit.SECONDS)
+        .callTimeout(2500, TimeUnit.MILLISECONDS)
+        .build()
+
+    // Every source request is awaited, but slow shards are capped at three seconds.
+    private val sourceHttp = http.newBuilder()
+        .connectTimeout(2, TimeUnit.SECONDS)
+        .readTimeout(2500, TimeUnit.MILLISECONDS)
+        .callTimeout(3, TimeUnit.SECONDS)
+        .build()
+
+    private suspend fun httpGet(url: String, client: OkHttpClient = http): String = withContext(Dispatchers.IO) {
         val builder = Request.Builder().url(url).get()
         headers.forEach { (key, value) -> builder.header(key, value) }
-        http.newCall(builder.build()).execute().use { response ->
+        client.newCall(builder.build()).execute().use { response ->
             if (!response.isSuccessful) throw IOException("HTTP ${response.code} for $url")
             response.body?.string().orEmpty()
         }
@@ -110,7 +130,7 @@ internal object MovyResolver {
                         val query = params.entries.joinToString("&") {
                             URLEncoder.encode(it.key, "UTF-8") + "=" + URLEncoder.encode(it.value, "UTF-8")
                         }
-                        val response = httpGet("$API/$node/sources?$query").trim()
+                        val response = httpGet("$API/$node/sources?$query", sourceHttp).trim()
                         val plain = decrypt(response, seed, tmdbId) ?: return@async emptyList<Pair<String, String>>()
                         val json = JSONObject(plain)
                         val found = mutableListOf<Pair<String, String>>()
@@ -173,7 +193,7 @@ internal object MovyResolver {
     private suspend fun fetchMetadata(mediaType: String, tmdbId: Int): JSONObject? {
         return try {
             val url = "$DB_API/$mediaType/$tmdbId?append_to_response=external_ids&language=en-US"
-            val body = httpGet(url)
+            val body = httpGet(url, metadataHttp)
             JSONObject(body).takeIf { it.optInt("id", 0) == tmdbId }
         } catch (_: Exception) {
             null
