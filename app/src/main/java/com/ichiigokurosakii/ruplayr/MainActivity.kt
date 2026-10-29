@@ -235,6 +235,36 @@ private fun RuplayrApp(
         }
     }
 
+    fun playContinue(entry: ContinueEntry) {
+        selected = entry.item
+        activeEpisode = null
+        sources = emptyList()
+        sourceDialog = false
+        if (entry.item.mediaType == MediaType.MOVIE) {
+            findSources(entry.item)
+        } else {
+            sourceLoading = true
+            sourceDialog = true
+            scope.launch {
+                val loaded = sourceRepository.episodes(entry.item)
+                val target = loaded.firstOrNull { it.season == entry.season && it.episode == entry.episode }
+                    ?: loaded.firstOrNull()
+                if (target != null) {
+                    activeEpisode = target
+                    val kind = if (entry.item.mediaType == MediaType.ANIME) "anime" else "tv"
+                    val episodeItem = entry.item.copy(
+                        title = target.name,
+                        detailUrl = "https://www.movy.sx/$kind/${entry.item.id}/${target.season}/${target.episode}"
+                    )
+                    sources = sourceRepository.findSources(episodeItem)
+                } else {
+                    sources = emptyList()
+                }
+                sourceLoading = false
+            }
+        }
+    }
+
     fun openItem(item: MediaItem) {
         selected = item
         activeEpisode = null
@@ -369,6 +399,10 @@ private fun RuplayrApp(
                                 scrollState = homeScrollState,
                                 expandedRow = expandedHomeRow,
                                 onExpandedRowChange = { expandedHomeRow = it },
+                                continueEntries = continueEntries,
+                                progressForKey = progressForKey,
+                                onRemoveContinue = removeFromContinue,
+                                onPlayContinue = ::playContinue,
                                 onSearch = { selectedTab = "Search" },
                                 onSelect = ::openItem,
                                 onPlayFeatured = { item -> openItem(item); findSources(item) }
@@ -410,7 +444,7 @@ private fun RuplayrApp(
                                     Row(
                                         Modifier.fillMaxWidth().padding(vertical = 4.dp)
                                             .clip(RoundedCornerShape(10.dp)).background(Page)
-                                            .clickable { sourceDialog = false; onPlay(source) }
+                                            .clickable { sourceDialog = false; selected?.let { onPlay(source, it, activeEpisode) } }
                                             .padding(14.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
@@ -442,6 +476,10 @@ private fun HomeScreen(
     scrollState: androidx.compose.foundation.ScrollState,
     expandedRow: MediaRow?,
     onExpandedRowChange: (MediaRow?) -> Unit,
+    continueEntries: List<ContinueEntry>,
+    progressForKey: (String) -> Pair<Long, Long>,
+    onRemoveContinue: (String) -> Unit,
+    onPlayContinue: (ContinueEntry) -> Unit,
     onSearch: () -> Unit,
     onSelect: (MediaItem) -> Unit,
     onPlayFeatured: (MediaItem) -> Unit
