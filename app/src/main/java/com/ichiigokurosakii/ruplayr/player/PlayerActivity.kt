@@ -1,6 +1,7 @@
 package com.ichiigokurosakii.ruplayr.player
 
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -27,6 +28,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -147,7 +150,20 @@ class PlayerActivity : ComponentActivity() {
         progressHandler.post(progressRunnable)
 
         setContent {
-            MaterialTheme {
+            val context = LocalContext.current
+            val savedTheme = getSharedPreferences("playback", MODE_PRIVATE).getString("theme_mode", "System") ?: "System"
+            val darkTheme = when (savedTheme) {
+                "Light" -> false
+                "Dark" -> true
+                else -> isSystemInDarkTheme()
+            }
+            val playerScheme = when {
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && darkTheme -> androidx.compose.material3.dynamicDarkColorScheme(context)
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> androidx.compose.material3.dynamicLightColorScheme(context)
+                darkTheme -> androidx.compose.material3.darkColorScheme()
+                else -> androidx.compose.material3.lightColorScheme()
+            }
+            MaterialTheme(colorScheme = playerScheme) {
                 var speedDialog by remember { mutableStateOf(false) }
                 var controllerVisible by remember { mutableStateOf(true) }
                 Column(Modifier.fillMaxSize().background(Color.Black)) {
