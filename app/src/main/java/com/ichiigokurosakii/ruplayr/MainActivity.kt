@@ -16,6 +16,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -371,7 +372,7 @@ private fun RuplayrApp(
                 )
             } else {
                 Column(
-                    Modifier.fillMaxSize().background(Page)
+                    Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
                         .statusBarsPadding().navigationBarsPadding()
                 ) {
                     Row(
@@ -475,32 +476,32 @@ private fun RuplayrApp(
                             sourceLoading -> Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                                 CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                                 Spacer(Modifier.height(12.dp))
-                                Text("Loading Movy servers…", color = Muted)
+                                Text("Loading Movy servers…", color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                            sources.isEmpty() -> Text("No playable servers were found for this title.", color = Muted)
+                            sources.isEmpty() -> Text("No playable servers were found for this title.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                             else -> Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
                                 sources.forEach { source ->
                                     Row(
                                         Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                                            .clip(RoundedCornerShape(10.dp)).background(Page)
+                                            .clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.background)
                                             .clickable { sourceDialog = false; selected?.let { onPlay(source, it, activeEpisode) } }
                                             .padding(14.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Accent)
+                                        Icon(Icons.Default.PlayArrow, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                         Spacer(Modifier.width(10.dp))
                                         Column(Modifier.weight(1f)) {
                                             Text(source.label.split(" · ").take(2).joinToString(" · "), color = Color.White, fontWeight = FontWeight.SemiBold)
-                                            Text(source.label.split(" · ").drop(2).joinToString(" · ").ifBlank { " " }, color = Muted, fontSize = 12.sp)
+                                            Text(source.label.split(" · ").drop(2).joinToString(" · ").ifBlank { " " }, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                                         }
-                                        Text("Play", color = Accent, fontWeight = FontWeight.Bold)
+                                        Text("Play", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
                         }
                     },
                     confirmButton = {
-                        TextButton(onClick = { sourceDialog = false }) { Text("Close", color = Accent) }
+                        TextButton(onClick = { sourceDialog = false }) { Text("Close", color = MaterialTheme.colorScheme.primary) }
                     }
                 )
             }
@@ -621,9 +622,9 @@ private fun HomeScreen(
 ) {
     val featured = remember(rows) { rows.flatMap { it.items }.distinctBy { it.mediaType.name + "-" + it.id }.randomOrNull() }
     if (expandedRow != null) {
-        Column(Modifier.fillMaxSize().background(Page)) {
+        Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { onExpandedRowChange(null) }) { Text("← Back", color = Accent) }
+                TextButton(onClick = { onExpandedRowChange(null) }) { Text("← Back", color = MaterialTheme.colorScheme.primary) }
                 Text(expandedRow!!.title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp))
             }
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -638,14 +639,14 @@ private fun HomeScreen(
                             onRemove = { onRemoveContinue(item.id) }
                         )
                     } else if (expandedRow!!.title != "Continue Watching") {
-                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Panel).clickable { onSelect(item) }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surfaceVariant).clickable { onSelect(item) }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                             AsyncImage(model = item.posterUrl, contentDescription = item.title, modifier = Modifier.width(82.dp).height(118.dp).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop)
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(item.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                item.year?.let { Text(it, color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
-                                Text(item.mediaType.name.lowercase().replaceFirstChar { it.uppercase() }, color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
-                                Text("View details  ›", color = Accent, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
+                                item.year?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
+                                Text(item.mediaType.name.lowercase().replaceFirstChar { it.uppercase() }, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+                                Text("View details  ›", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
                             }
                         }
                     }
@@ -654,15 +655,15 @@ private fun HomeScreen(
         }
     } else {
         Column(Modifier.fillMaxSize().verticalScroll(scrollState).padding(bottom = 12.dp)) {
-            Box(Modifier.fillMaxWidth().height(330.dp).padding(horizontal = 12.dp).clip(RoundedCornerShape(20.dp)).background(Panel)) {
+            Box(Modifier.fillMaxWidth().height(330.dp).padding(horizontal = 12.dp).clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surfaceVariant)) {
                 if (featured?.backdropUrl != null || featured?.posterUrl != null) AsyncImage(model = featured.backdropUrl ?: featured.posterUrl, contentDescription = featured.title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                else Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(0xFF343047), Page))))
+                else Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(0xFF343047), MaterialTheme.colorScheme.background))))
                 Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0x22000000), Color(0xEE090B10)))))
                 Column(Modifier.align(Alignment.BottomStart).padding(start = 20.dp, end = 20.dp, bottom = 22.dp)) {
                     Text("FEATURED", color = Color(0xFFC4B5FD), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
                     Text(featured?.title ?: "Discover something great", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Box(Modifier.fillMaxWidth().padding(top = 14.dp).height(48.dp)) {
-                        Button(onClick = { featured?.let(onPlayFeatured) }, enabled = featured != null, modifier = Modifier.align(Alignment.Center), colors = ButtonDefaults.buttonColors(containerColor = Accent), shape = RoundedCornerShape(10.dp)) {
+                        Button(onClick = { featured?.let(onPlayFeatured) }, enabled = featured != null, modifier = Modifier.align(Alignment.Center), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary), shape = RoundedCornerShape(10.dp)) {
                             Icon(Icons.Default.PlayArrow, contentDescription = null); Spacer(Modifier.width(5.dp)); Text("Play")
                         }
                         OutlinedButton(onClick = { featured?.let(onSelect) }, enabled = featured != null, modifier = Modifier.align(Alignment.CenterEnd), shape = RoundedCornerShape(10.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)) { Text("Details") }
@@ -670,13 +671,13 @@ private fun HomeScreen(
                 }
             }
             Spacer(Modifier.height(18.dp))
-            if (loading) Box(Modifier.fillMaxWidth().padding(28.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Accent) }
-            else if (rows.isEmpty()) Text("Catalogue could not load. Check your connection and try again.", color = Muted, modifier = Modifier.padding(20.dp))
+            if (loading) Box(Modifier.fillMaxWidth().padding(28.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = MaterialTheme.colorScheme.primary) }
+            else if (rows.isEmpty()) Text("Catalogue could not load. Check your connection and try again.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp))
             else (listOfNotNull(MediaRow("Continue Watching", continueEntries.map { it.item }).takeIf { continueEntries.isNotEmpty() }) + rows).forEach { row ->
                 Column(Modifier.padding(bottom = 18.dp)) {
                     Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 12.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                         Text(row.title, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-                        TextButton(onClick = { onExpandedRowChange(row) }) { Text("See all  ›", color = Accent, fontSize = 13.sp) }
+                        TextButton(onClick = { onExpandedRowChange(row) }) { Text("See all  ›", color = MaterialTheme.colorScheme.primary, fontSize = 13.sp) }
                     }
                     LazyRow(contentPadding = PaddingValues(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         items(row.items, key = { "${it.mediaType}-${it.id}" }) { item ->
@@ -691,10 +692,10 @@ private fun HomeScreen(
                                 )
                             } else {
                                 Column(Modifier.width(132.dp).clip(RoundedCornerShape(16.dp)).clickable { onSelect(item) }.animateContentSize()) {
-                                    AsyncImage(model = item.posterUrl, contentDescription = item.title, modifier = Modifier.fillMaxWidth().height(178.dp).clip(RoundedCornerShape(12.dp)).background(Panel), contentScale = ContentScale.Crop)
+                                    AsyncImage(model = item.posterUrl, contentDescription = item.title, modifier = Modifier.fillMaxWidth().height(178.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant), contentScale = ContentScale.Crop)
                                     Spacer(Modifier.height(7.dp))
                                     Text(item.title, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                    item.year?.let { Text(it, color = Muted, fontSize = 11.sp) }
+                                    item.year?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp) }
                                 }
                             }
                         }
@@ -714,7 +715,7 @@ private fun ContinueWatchingPoster(
     onRemove: () -> Unit
 ) {
     Column(Modifier.width(124.dp)) {
-        Box(Modifier.fillMaxWidth().height(178.dp).clip(RoundedCornerShape(12.dp)).background(Panel).clickable { onOpen() }) {
+        Box(Modifier.fillMaxWidth().height(178.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant).clickable { onOpen() }) {
             AsyncImage(model = entry.item.posterUrl, contentDescription = entry.item.title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             Box(Modifier.align(Alignment.Center).size(62.dp).clip(RoundedCornerShape(50)).background(Color(0xBB090B10)).border(1.dp, Color(0xDDFFFFFF), RoundedCornerShape(50)).clickable { onPlay() }, contentAlignment = Alignment.Center) {
                 Icon(Icons.Default.PlayArrow, contentDescription = "Continue playing", tint = Color.White, modifier = Modifier.size(40.dp))
@@ -734,14 +735,14 @@ private fun ContinueWatchingPoster(
                 LinearProgressIndicator(
                     progress = progressFraction(progress.first, progress.second),
                     modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(4.dp),
-                    color = Accent,
+                    color = MaterialTheme.colorScheme.primary,
                     trackColor = Color(0x99000000)
                 )
             }
         }
         Spacer(Modifier.height(7.dp))
         Text(entry.item.title, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        entry.episodeName?.let { Text(it, color = Muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+        entry.episodeName?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
     }
 }
 
@@ -754,7 +755,7 @@ private fun ContinueWatchingListItem(
     onRemove: () -> Unit
 ) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Panel).clickable { onOpen() }.padding(10.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant).clickable { onOpen() }.padding(10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(Modifier.width(82.dp).height(118.dp).clip(RoundedCornerShape(8.dp))) {
@@ -777,7 +778,7 @@ private fun ContinueWatchingListItem(
                 LinearProgressIndicator(
                     progress = progressFraction(progress.first, progress.second),
                     modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(4.dp),
-                    color = Accent,
+                    color = MaterialTheme.colorScheme.primary,
                     trackColor = Color(0x99000000)
                 )
             }
@@ -785,9 +786,9 @@ private fun ContinueWatchingListItem(
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(entry.item.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            entry.episodeName?.let { Text(it, color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
-            Text(entry.item.mediaType.name.lowercase().replaceFirstChar { it.uppercase() }, color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
-            Text("Continue watching  ›", color = Accent, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+            entry.episodeName?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
+            Text(entry.item.mediaType.name.lowercase().replaceFirstChar { it.uppercase() }, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+            Text("Continue watching  ›", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
         }
     }
 }
@@ -805,7 +806,7 @@ private fun SearchScreen(
     Column(Modifier.fillMaxSize().padding(horizontal = 18.dp)) {
         Text("Search", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(14.dp))
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
             BasicTextField(
                 value = query, onValueChange = onQueryChange,
                 modifier = Modifier.weight(1f).padding(4.dp).focusRequester(focusRequester),
@@ -813,23 +814,23 @@ private fun SearchScreen(
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { onSearch() }),
                 textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 16.sp),
-                decorationBox = { inner -> if (query.isEmpty()) Text("Search movies or TV shows…", color = Muted); inner() }
+                decorationBox = { inner -> if (query.isEmpty()) Text("Search movies or TV shows…", color = MaterialTheme.colorScheme.onSurfaceVariant); inner() }
             )
-            IconButton(onClick = onSearch) { Icon(Icons.Default.Search, "Search", tint = Accent) }
+            IconButton(onClick = onSearch) { Icon(Icons.Default.Search, "Search", tint = MaterialTheme.colorScheme.primary) }
         }
         Spacer(Modifier.height(12.dp))
         when {
-            loading -> Box(Modifier.fillMaxWidth().padding(30.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Accent) }
-            results.isEmpty() -> Text("Enter a title and tap search.", color = Muted, modifier = Modifier.padding(top = 16.dp))
+            loading -> Box(Modifier.fillMaxWidth().padding(30.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = MaterialTheme.colorScheme.primary) }
+            results.isEmpty() -> Text("Enter a title and tap search.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 16.dp))
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 items(results, key = { "${it.mediaType}-${it.id}" }) { item ->
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Panel).clickable { onSelect(item) }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant).clickable { onSelect(item) }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                         AsyncImage(model = item.posterUrl, contentDescription = item.title, modifier = Modifier.width(74.dp).height(108.dp).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(item.title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            Text(listOfNotNull(item.year, item.mediaType.name).joinToString(" • "), color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 5.dp))
-                            if (item.overview.isNotBlank()) Text(item.overview, color = Muted, fontSize = 12.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 7.dp))
+                            Text(listOfNotNull(item.year, item.mediaType.name).joinToString(" • "), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, modifier = Modifier.padding(top = 5.dp))
+                            if (item.overview.isNotBlank()) Text(item.overview, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 7.dp))
                         }
                     }
                 }
@@ -856,14 +857,14 @@ private fun DetailsScreen(
     var seasonMenu by remember { mutableStateOf(false) }
     val seasons = episodes.map { it.season }.distinct().sorted()
     val visibleEpisodes = episodes.filter { it.season == selectedSeason }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).background(Page).statusBarsPadding().navigationBarsPadding()) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).background(MaterialTheme.colorScheme.background).statusBarsPadding().navigationBarsPadding()) {
         Box(Modifier.fillMaxWidth().height(300.dp)) {
             AsyncImage(model = item.backdropUrl ?: item.posterUrl, contentDescription = item.title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Page))))
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, MaterialTheme.colorScheme.background))))
             Text("‹  Back", color = Color.White, modifier = Modifier.padding(16.dp).clip(RoundedCornerShape(8.dp)).background(Color(0x99090B10)).clickable { onBack() }.padding(horizontal = 12.dp, vertical = 8.dp))
             Column(Modifier.align(Alignment.BottomStart).padding(20.dp)) {
                 Text(item.title, color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.ExtraBold)
-                Text(listOfNotNull(item.year, item.mediaType.name).joinToString("  •  "), color = Muted, modifier = Modifier.padding(top = 6.dp))
+                Text(listOfNotNull(item.year, item.mediaType.name).joinToString("  •  "), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
             }
         }
         Text(item.overview.ifBlank { "No overview is available for this title." }, color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp, lineHeight = 23.sp, modifier = Modifier.padding(20.dp))
@@ -872,7 +873,7 @@ private fun DetailsScreen(
                 onClick = onPlayTitle,
                 enabled = !loading && !sourceLoading && (item.mediaType == MediaType.MOVIE || episodes.isNotEmpty()),
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Accent),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 val savedPair = lastPlayedEpisode?.split(":")
@@ -896,11 +897,11 @@ private fun DetailsScreen(
                     }
                 }
             }
-            if (loading) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 10.dp), color = Accent)
+            if (loading) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 10.dp), color = MaterialTheme.colorScheme.primary)
             if (item.mediaType != MediaType.MOVIE) {
                 Text("Episodes", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp, modifier = Modifier.padding(top = 24.dp, bottom = 8.dp))
-                if (episodesLoading) Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Accent) }
-                else if (episodes.isEmpty()) Text("No episode list was returned by the metadata service.", color = Muted, fontSize = 12.sp)
+                if (episodesLoading) Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = MaterialTheme.colorScheme.primary) }
+                else if (episodes.isEmpty()) Text("No episode list was returned by the metadata service.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                 else {
                     Box {
                         OutlinedButton(onClick = { seasonMenu = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)) {
@@ -920,7 +921,7 @@ private fun DetailsScreen(
                     visibleEpisodes.forEach { episode ->
                         Row(
                             Modifier.fillMaxWidth().padding(vertical = 5.dp).clip(RoundedCornerShape(12.dp))
-                                .background(Panel).clickable { onPlayEpisode(episode) }.padding(10.dp),
+                                .background(MaterialTheme.colorScheme.surfaceVariant).clickable { onPlayEpisode(episode) }.padding(10.dp),
                             verticalAlignment = Alignment.Top
                         ) {
                             Box(Modifier.width(116.dp).height(76.dp).clip(RoundedCornerShape(8.dp))) {
@@ -935,7 +936,7 @@ private fun DetailsScreen(
                                     LinearProgressIndicator(
                                         progress = progressFraction(epProgress.first, epProgress.second),
                                         modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(4.dp),
-                                        color = Accent,
+                                        color = MaterialTheme.colorScheme.primary,
                                         trackColor = Color(0x99000000)
                                     )
                                 }
@@ -943,8 +944,8 @@ private fun DetailsScreen(
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(episode.name, color = Color.White, fontWeight = FontWeight.SemiBold)
-                                Text(episode.overview.ifBlank { "No episode description available." }, color = Muted, fontSize = 12.sp, lineHeight = 17.sp, modifier = Modifier.padding(top = 5.dp))
-                                Text("▶ Play episode", color = Accent, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                                Text(episode.overview.ifBlank { "No episode description available." }, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, lineHeight = 17.sp, modifier = Modifier.padding(top = 5.dp))
+                                Text("▶ Play episode", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
                             }
                         }
                     }
