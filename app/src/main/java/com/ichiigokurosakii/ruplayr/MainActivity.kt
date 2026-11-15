@@ -1,5 +1,7 @@
 package com.ichiigokurosakii.ruplayr
 
+import android.app.Activity
+import android.os.Build
 import android.content.Intent
 import android.os.Bundle
 import android.content.SharedPreferences
@@ -7,6 +9,12 @@ import org.json.JSONObject
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,7 +38,15 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material3.*
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,11 +69,6 @@ import com.ichiigokurosakii.ruplayr.data.MovySource
 import com.ichiigokurosakii.ruplayr.data.MovySourceRepository
 import com.ichiigokurosakii.ruplayr.player.PlayerActivity
 import kotlinx.coroutines.launch
-
-private val Page = Color(0xFF090B10)
-private val Panel = Color(0xFF151923)
-private val Accent = Color(0xFF8B5CF6)
-private val Muted = Color(0xFF9CA3AF)
 
 private data class ContinueEntry(
     val item: MediaItem,
@@ -132,8 +143,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, true)
-        window.statusBarColor = android.graphics.Color.rgb(9, 11, 16)
-        window.navigationBarColor = android.graphics.Color.rgb(9, 11, 16)
         setContent {
             RuplayrApp(
                 lastPlayed = { id -> getSharedPreferences("playback", MODE_PRIVATE).getString("last_$id", null) },
@@ -204,6 +213,26 @@ private fun RuplayrApp(
     val searchFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     val appContext = androidx.compose.ui.platform.LocalContext.current
+    var themeMode by remember { mutableStateOf(appContext.getSharedPreferences("playback", android.content.Context.MODE_PRIVATE).getString("theme_mode", "System") ?: "System") }
+    val systemDark = isSystemInDarkTheme()
+    val darkTheme = when (themeMode) { "Light" -> false; "Dark" -> true; else -> systemDark }
+    val colorScheme = when {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && darkTheme -> dynamicDarkColorScheme(appContext)
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> dynamicLightColorScheme(appContext)
+        darkTheme -> darkColorScheme(primary = Color(0xFFB9A5FF), secondary = Color(0xFFCCC2DC), background = Color(0xFF101116), surface = Color(0xFF191A20))
+        else -> lightColorScheme(primary = Color(0xFF6750A4), secondary = Color(0xFF625B71), background = Color(0xFFF9F7FF), surface = Color(0xFFFFFBFF))
+    }
+    val view = LocalView.current
+    SideEffect {
+        (view.context as? Activity)?.window?.let { window ->
+            window.statusBarColor = colorScheme.background.toArgb()
+            window.navigationBarColor = colorScheme.background.toArgb()
+            WindowInsetsControllerCompat(window, view).apply {
+                isAppearanceLightStatusBars = !darkTheme
+                isAppearanceLightNavigationBars = !darkTheme
+            }
+        }
+    }
     val continueEntries = remember(continueRefresh) {
         readContinueEntries(appContext.getSharedPreferences("playback", android.content.Context.MODE_PRIVATE))
     }
@@ -318,11 +347,8 @@ private fun RuplayrApp(
         }
     }
 
-    MaterialTheme(colorScheme = darkColorScheme(
-        background = Page, surface = Panel, primary = Accent,
-        onBackground = Color.White, onSurface = Color.White
-    )) {
-        Surface(Modifier.fillMaxSize(), color = Page) {
+    MaterialTheme(colorScheme = colorScheme) {
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             if (selected != null) {
                 DetailsScreen(
                     item = selected!!,
@@ -353,8 +379,8 @@ private fun RuplayrApp(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column {
-                            Text("RUPLAYR", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
-                            Text("Movies, series & more", color = Muted, fontSize = 12.sp)
+                            Text("RUPLAYR", color = MaterialTheme.colorScheme.onSurface, fontSize = 22.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+                            Text("Movies, series & more", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                         }
                         IconButton(onClick = {
                                 if (selectedTab == "Search") {
@@ -365,8 +391,16 @@ private fun RuplayrApp(
                             Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.White)
                         }
                     }
-                    Box(Modifier.weight(1f)) {
-                        when (selectedTab) {
+                    AnimatedContent(
+                        targetState = selectedTab,
+                        modifier = Modifier.weight(1f),
+                        transitionSpec = {
+                            (fadeIn(tween(180)) + slideInHorizontally(tween(220)) { it / 14 }) togetherWith
+                                (fadeOut(tween(120)) + slideOutHorizontally(tween(180)) { -it / 18 })
+                        },
+                        label = "main_tab_transition"
+                    ) { activeTab ->
+                        when (activeTab) {
                             "Search" -> SearchScreen(
                                 query = query, onQueryChange = { query = it },
                                 focusRequester = searchFocusRequester,
@@ -377,27 +411,16 @@ private fun RuplayrApp(
                                 },
                                 onSelect = ::openItem
                             )
-                            "Settings" -> Column(Modifier.fillMaxSize().padding(24.dp)) {
-                                Text("Settings", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                                Spacer(Modifier.height(20.dp))
-                                Text("Default quality", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                                Spacer(Modifier.height(8.dp))
-                                var qualityMenu by remember { mutableStateOf(false) }
-                                Box {
-                                    OutlinedButton(onClick = { qualityMenu = true }, modifier = Modifier.fillMaxWidth()) {
-                                        Text(defaultQuality, modifier = Modifier.weight(1f), color = Color.White)
-                                        Text("⌄", color = Color.White)
-                                    }
-                                    DropdownMenu(expanded = qualityMenu, onDismissRequest = { qualityMenu = false }) {
-                                        listOf("Auto", "2160p", "1080p", "720p", "480p").forEach { quality ->
-                                            DropdownMenuItem(text = { Text(quality) }, onClick = {
-                                                saveDefaultQuality(quality)
-                                                qualityMenu = false
-                                            })
-                                        }
-                                    }
-                                }
-                            }
+                            "Settings" -> SettingsScreen(
+                                defaultQuality = defaultQuality,
+                                themeMode = themeMode,
+                                onThemeModeChange = {
+                                    themeMode = it
+                                    appContext.getSharedPreferences("playback", android.content.Context.MODE_PRIVATE)
+                                        .edit().putString("theme_mode", it).apply()
+                                },
+                                onQualityChange = saveDefaultQuality
+                            )
                             else -> HomeScreen(
                                 rows = homeRows, loading = homeLoading,
                                 scrollState = homeScrollState,
@@ -413,19 +436,30 @@ private fun RuplayrApp(
                             )
                         }
                     }
-                    Row(
-                        Modifier.fillMaxWidth().background(Panel).padding(vertical = 3.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(onClick = { selectedTab = "Home" }) { Icon(Icons.Default.Home, "Home", tint = if (selectedTab == "Home") Accent else Muted) }
-                        IconButton(onClick = {
-                            if (selectedTab == "Search") {
-                                searchFocusRequester.requestFocus()
-                                keyboardController?.show()
-                            } else selectedTab = "Search"
-                        }) { Icon(Icons.Default.Search, "Search", tint = if (selectedTab == "Search") Accent else Muted) }
-                        IconButton(onClick = { selectedTab = "Settings" }) { Icon(Icons.Default.Settings, "Settings", tint = if (selectedTab == "Settings") Accent else Muted) }
+                    NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 3.dp) {
+                        listOf("Home", "Search", "Settings").forEach { tab ->
+                            NavigationBarItem(
+                                selected = selectedTab == tab,
+                                onClick = {
+                                    if (tab == "Search" && selectedTab == "Search") {
+                                        searchFocusRequester.requestFocus()
+                                        keyboardController?.show()
+                                    } else selectedTab = tab
+                                },
+                                icon = {
+                                    Icon(
+                                        when (tab) {
+                                            "Home" -> Icons.Default.Home
+                                            "Search" -> Icons.Default.Search
+                                            else -> Icons.Default.Settings
+                                        },
+                                        contentDescription = tab
+                                    )
+                                },
+                                label = { Text(tab) },
+                                alwaysShowLabel = true
+                            )
+                        }
                     }
                 }
             }
@@ -433,12 +467,12 @@ private fun RuplayrApp(
             if (sourceDialog) {
                 AlertDialog(
                     onDismissRequest = { if (!sourceLoading) sourceDialog = false },
-                    containerColor = Panel,
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
                     title = { Text("Choose server", color = Color.White, fontWeight = FontWeight.Bold) },
                     text = {
                         when {
                             sourceLoading -> Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                                CircularProgressIndicator(color = Accent)
+                                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                                 Spacer(Modifier.height(12.dp))
                                 Text("Loading Movy servers…", color = Muted)
                             }
@@ -470,6 +504,103 @@ private fun RuplayrApp(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun SettingsScreen(
+    defaultQuality: String,
+    themeMode: String,
+    onThemeModeChange: (String) -> Unit,
+    onQualityChange: (String) -> Unit
+) {
+    var qualityMenu by remember { mutableStateOf(false) }
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Settings", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+            Text("Make Ruplayr feel like yours", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+        }
+        ElevatedCard(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+            shape = RoundedCornerShape(24.dp)
+        ) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Icon(Icons.Default.DarkMode, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Column(Modifier.weight(1f)) {
+                        Text("Appearance", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                        Text("Choose how Ruplayr looks", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    listOf("System", "Light", "Dark").forEachIndexed { index, mode ->
+                        SegmentedButton(
+                            selected = themeMode == mode,
+                            onClick = { onThemeModeChange(mode) },
+                            shape = SegmentedButtonDefaults.itemShape(index = index, count = 3),
+                            icon = {
+                                if (themeMode == mode) SegmentedButtonDefaults.ActiveIcon()
+                                else Icon(
+                                    when (mode) {
+                                        "Light" -> Icons.Default.LightMode
+                                        "Dark" -> Icons.Default.DarkMode
+                                        else -> Icons.Default.BrightnessAuto
+                                    },
+                                    contentDescription = null
+                                )
+                            }
+                        ) { Text(mode) }
+                    }
+                }
+                Text(
+                    when (themeMode) {
+                        "Light" -> "Light theme is always enabled."
+                        "Dark" -> "Dark theme is always enabled."
+                        else -> "Follows your device appearance setting."
+                    },
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
+        ElevatedCard(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+            shape = RoundedCornerShape(24.dp)
+        ) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Icon(Icons.Default.Movie, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Column(Modifier.weight(1f)) {
+                        Text("Playback", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                        Text("Default streaming quality", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                OutlinedButton(
+                    onClick = { qualityMenu = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("Default quality", modifier = Modifier.weight(1f))
+                    Text(defaultQuality, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                    Icon(Icons.Default.BrightnessAuto, contentDescription = null)
+                }
+                DropdownMenu(expanded = qualityMenu, onDismissRequest = { qualityMenu = false }) {
+                    listOf("Auto", "2160p", "1080p", "720p", "480p").forEach { quality ->
+                        DropdownMenuItem(
+                            text = { Text(quality) },
+                            leadingIcon = { if (quality == defaultQuality) Icon(Icons.Default.Movie, null) },
+                            onClick = { onQualityChange(quality); qualityMenu = false }
+                        )
+                    }
+                }
+            }
+        }
+        Text("Ruplayr", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(start = 4.dp, top = 4.dp))
     }
 }
 
@@ -507,7 +638,7 @@ private fun HomeScreen(
                             onRemove = { onRemoveContinue(item.id) }
                         )
                     } else if (expandedRow!!.title != "Continue Watching") {
-                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Panel).clickable { onSelect(item) }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Panel).clickable { onSelect(item) }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                             AsyncImage(model = item.posterUrl, contentDescription = item.title, modifier = Modifier.width(82.dp).height(118.dp).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop)
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
@@ -523,7 +654,7 @@ private fun HomeScreen(
         }
     } else {
         Column(Modifier.fillMaxSize().verticalScroll(scrollState).padding(bottom = 12.dp)) {
-            Box(Modifier.fillMaxWidth().height(300.dp).padding(horizontal = 12.dp).clip(RoundedCornerShape(20.dp)).background(Panel)) {
+            Box(Modifier.fillMaxWidth().height(330.dp).padding(horizontal = 12.dp).clip(RoundedCornerShape(20.dp)).background(Panel)) {
                 if (featured?.backdropUrl != null || featured?.posterUrl != null) AsyncImage(model = featured.backdropUrl ?: featured.posterUrl, contentDescription = featured.title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 else Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(0xFF343047), Page))))
                 Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0x22000000), Color(0xEE090B10)))))
@@ -559,7 +690,7 @@ private fun HomeScreen(
                                     onRemove = { onRemoveContinue(item.id) }
                                 )
                             } else {
-                                Column(Modifier.width(124.dp).clickable { onSelect(item) }) {
+                                Column(Modifier.width(132.dp).clip(RoundedCornerShape(16.dp)).clickable { onSelect(item) }.animateContentSize()) {
                                     AsyncImage(model = item.posterUrl, contentDescription = item.title, modifier = Modifier.fillMaxWidth().height(178.dp).clip(RoundedCornerShape(12.dp)).background(Panel), contentScale = ContentScale.Crop)
                                     Spacer(Modifier.height(7.dp))
                                     Text(item.title, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -674,7 +805,7 @@ private fun SearchScreen(
     Column(Modifier.fillMaxSize().padding(horizontal = 18.dp)) {
         Text("Search", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(14.dp))
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Panel).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Panel).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
             BasicTextField(
                 value = query, onValueChange = onQueryChange,
                 modifier = Modifier.weight(1f).padding(4.dp).focusRequester(focusRequester),
@@ -735,7 +866,7 @@ private fun DetailsScreen(
                 Text(listOfNotNull(item.year, item.mediaType.name).joinToString("  •  "), color = Muted, modifier = Modifier.padding(top = 6.dp))
             }
         }
-        Text(item.overview.ifBlank { "No overview is available for this title." }, color = Color(0xFFE5E7EB), fontSize = 15.sp, lineHeight = 23.sp, modifier = Modifier.padding(20.dp))
+        Text(item.overview.ifBlank { "No overview is available for this title." }, color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp, lineHeight = 23.sp, modifier = Modifier.padding(20.dp))
         Column(Modifier.padding(horizontal = 20.dp)) {
             Button(
                 onClick = onPlayTitle,
