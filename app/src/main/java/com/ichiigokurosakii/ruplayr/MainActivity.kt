@@ -869,7 +869,7 @@ private fun DetailsScreen(
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).background(MaterialTheme.colorScheme.background).statusBarsPadding().navigationBarsPadding()) {
         Box(Modifier.fillMaxWidth().height(300.dp)) {
             AsyncImage(model = item.backdropUrl ?: item.posterUrl, contentDescription = item.title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, MaterialTheme.colorScheme.background))))
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xEE090B10)))))
             Text("‹  Back", color = Color.White, modifier = Modifier.padding(16.dp).clip(RoundedCornerShape(8.dp)).background(Color(0x99090B10)).clickable { onBack() }.padding(horizontal = 12.dp, vertical = 8.dp))
             Column(Modifier.align(Alignment.BottomStart).padding(20.dp)) {
                 Text(item.title, color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.ExtraBold)
