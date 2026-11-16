@@ -534,10 +534,9 @@ private fun SettingsScreen(
             Text("Make Ruplayr feel like yours", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
         }
         ElevatedCard(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().animateContentSize(animationSpec = tween(280)),
             colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-            shape = RoundedCornerShape(24.dp),
-            modifier = Modifier.animateContentSize(animationSpec = tween(280))
+            shape = RoundedCornerShape(24.dp)
         ) {
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
