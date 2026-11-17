@@ -4,7 +4,35 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val githubBuildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+val stableKeystorePath = System.getenv("RUPLAYR_KEYSTORE_PATH")
+val stableKeystorePassword = System.getenv("RUPLAYR_KEYSTORE_PASSWORD")
+val stableKeyAlias = System.getenv("RUPLAYR_KEY_ALIAS")
+val stableKeyPassword = System.getenv("RUPLAYR_KEY_PASSWORD")
+val hasStableSigning = !stableKeystorePath.isNullOrBlank() &&
+    !stableKeystorePassword.isNullOrBlank() &&
+    !stableKeyAlias.isNullOrBlank() &&
+    !stableKeyPassword.isNullOrBlank()
+
 android {
+    signingConfigs {
+        if (hasStableSigning) {
+            create("stable") {
+                storeFile = file(stableKeystorePath!!)
+                storePassword = stableKeystorePassword
+                keyAlias = stableKeyAlias
+                keyPassword = stableKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        getByName("debug") {
+            if (hasStableSigning) {
+                signingConfig = signingConfigs.getByName("stable")
+            }
+        }
+    }
     namespace = "com.ichiigokurosakii.ruplayr"
     compileSdk = 35
 
@@ -12,8 +40,7 @@ android {
         applicationId = "com.ichiigokurosakii.ruplayr"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        // CI builds use a monotonically increasing versionCode so Android accepts updates.\n        versionCode = 1000 + githubBuildNumber\n        versionName = "0.1.$githubBuildNumber"
     }
 
     buildFeatures { compose = true }
