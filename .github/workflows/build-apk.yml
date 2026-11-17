@@ -6,7 +6,6 @@ on:
   pull_request:
   workflow_dispatch:
 
-# Give each commit its own group so a stale/stuck run cannot block the latest APK.
 concurrency:
   group: ruplayr-apk-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: false
@@ -29,8 +28,28 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.11.1"
+      - name: Configure persistent app signing
+        if: github.event_name != 'pull_request'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.RUPLAYR_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::Add the RUPLAYR_KEYSTORE_BASE64, RUPLAYR_KEYSTORE_PASSWORD and RUPLAYR_KEY_PASSWORD repository secrets before building install-over-update APKs."
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/ruplayr-release.jks"
       - name: Build debug APK
-        run: gradle --no-daemon assembleDebug
+        env:
+          RUPLAYR_KEYSTORE_PATH: ${{ runner.temp }}/ruplayr-release.jks
+          RUPLAYR_KEYSTORE_PASSWORD: ${{ secrets.RUPLAYR_KEYSTORE_PASSWORD }}
+          RUPLAYR_KEY_ALIAS: ruplayr
+          RUPLAYR_KEY_PASSWORD: ${{ secrets.RUPLAYR_KEY_PASSWORD }}
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ] && [ ! -s "$RUPLAYR_KEYSTORE_PATH" ]; then
+            echo "::error::Persistent signing keystore is missing."
+            exit 1
+          fi
+          gradle --no-daemon assembleDebug
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
